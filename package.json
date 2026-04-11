@@ -1,0 +1,70 @@
+{
+  "name": "vgm-vinyl-creator",
+  "version": "1.0.0",
+  "description": "VGM Vinyl Creator — Create YouTube Shorts/Reels with spinning vinyl, audio visualizer, and retro gaming vibes",
+  "main": "electron/main.cjs",
+  "author": "Twispy",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:build": "vite build && electron-builder --win",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "ffmpeg-static": "^5.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1",
+    "vite": "^5.0.12",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.twispy.vgm-vinyl-creator",
+    "productName": "VGM Vinyl Creator",
+    "copyright": "Copyright © 2025 Twispy",
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/ffmpeg-static/ffmpeg.exe",
+        "to": "ffmpeg.exe"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": null
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerSidebar": null,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "VGM Vinyl Creator"
+    },
+    "portable": {
+      "artifactName": "VGM-Vinyl-Creator-Portable-${version}.exe"
+    },
+    "directories": {
+      "output": "release"
+    }
+  }
+}

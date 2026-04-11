@@ -1,0 +1,159 @@
+/* ═══════════════════════════════════════════
+   VGM VINYL CREATOR — Global Styles
+   ═══════════════════════════════════════════ */
+
+:root {
+  /* ── Core palette ── */
+  --bg-deep: #06060c;
+  --bg-surface: #0d0d18;
+  --bg-elevated: #14142a;
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.12);
+
+  /* ── Accent colors ── */
+  --accent-primary: #a78bfa;
+  --accent-secondary: #c084fc;
+  --accent-warm: #f472b6;
+  --accent-cool: #60a5fa;
+  --accent-glow: rgba(167, 139, 250, 0.3);
+
+  /* ── Text ── */
+  --text-primary: #f1f0f5;
+  --text-secondary: rgba(241, 240, 245, 0.6);
+  --text-muted: rgba(241, 240, 245, 0.35);
+
+  /* ── Vinyl ── */
+  --vinyl-black: #0a0a0a;
+  --vinyl-groove: rgba(255, 255, 255, 0.03);
+  --vinyl-shine: rgba(255, 255, 255, 0.06);
+  --vinyl-label-size: 38%;
+
+  /* ── Typography ── */
+  --font-display: 'Outfit', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+
+  /* ── Spacing ── */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --radius-full: 50%;
+
+  /* ── Export dimensions ── */
+  --export-width: 1080;
+  --export-height: 1920;
+}
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-display);
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--glass-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--glass-highlight);
+}
+
+/* ── Selection ── */
+::selection {
+  background: var(--accent-primary);
+  color: var(--bg-deep);
+}
+
+/* ── Utility classes ── */
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.glass-strong {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+}
+
+.glow-text {
+  text-shadow: 0 0 20px var(--accent-glow), 0 0 40px rgba(167, 139, 250, 0.15);
+}
+
+/* ── Button base ── */
+button {
+  font-family: var(--font-display);
+  cursor: pointer;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--text-primary);
+}
+
+input, textarea {
+  font-family: var(--font-display);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+input:focus, textarea:focus {
+  border-color: var(--accent-primary);
+}
+input::placeholder, textarea::placeholder {
+  color: var(--text-muted);
+}
+
+/* ── Animations ── */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes blob-morph {
+  0%, 100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+  25% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+  50% { border-radius: 50% 60% 30% 60% / 30% 50% 70% 50%; }
+  75% { border-radius: 40% 60% 50% 40% / 60% 40% 60% 30%; }
+}
