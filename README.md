@@ -18,13 +18,14 @@ Create stunning YouTube Shorts & Instagram Reels featuring video game music with
 - **Beat-sync auto effects** — flash/zoom/glitch/shake triggered automatically on each beat
 - **Retro scanlines & film grain** — CRT-style overlay
 
-### 📋 Info Card — 6 Styles
+### 📋 Info Card — 7 Styles
 - **Full Width** — opaque bottom card, gameplay video integrated left with scanlines
 - **Glass** — floating glassmorphism panel with gradient border
 - **Minimal** — text only, no background panel
 - **Neon** — dark floating card with multi-layer glowing border
 - **Split** — left panel with track info / right panel with gameplay thumbnail or accent block
 - **Cinematic** — full-width letterbox banner with accent bars, large title, director-style layout
+- **Polaroid** — white photo card with cover art, slight tilt effect, dark ink text
 - Per-style height & Y-position sliders, word-wrap + manual line breaks on all text fields
 - Gameplay window **glow border** with configurable intensity
 
@@ -37,8 +38,13 @@ Create stunning YouTube Shorts & Instagram Reels featuring video game music with
 - **After-hook text overlay** — subtitle-style lines appearing sequentially, configurable font/size/position
 - Hook and TTS **re-trigger on every preview loop**
 
+### 💿 Vinyl Intro Animation
+- **Animated intro** — vinyl zooms in from scale 0 with a glitch + flash effect on arrival
+- Intro is **synced after the hook** when hook intro is enabled
+- **Duration slider** — control intro animation length (0.5s to 4s)
+
 ### 🎨 Appearance
-- **6 style templates** — Dark Neon, Lo-Fi Warm, Minimal, Retro Arcade, Synthwave, Ocean
+- **14 style templates** — Dark Neon, Lo-Fi Warm, Minimal, Retro Arcade, Synthwave, Ocean, Cyberpunk, Dark Fantasy, Vaporwave, Horror, Zen Garden, Jazz Club, Deep Space, Pastel Dream
 - **Color filters** — Pastel, Warm, Cold, Vintage, Neon with intensity slider
 - **Gameplay color filters** — per-clip brightness, contrast, saturation, hue sliders
 - **Vignette** — radial darkening from edges
@@ -58,6 +64,7 @@ Create stunning YouTube Shorts & Instagram Reels featuring video game music with
 
 ### 🎵 Audio
 - Progress bar with draggable thumb (preview only, not exported)
+- **Audio normalization** — peak normalization to -1 dBFS with dB gain display, toggleable
 - **Preview loop** — loops between export start/end points with full hook/TTS reset each loop
 - **Audio fade in/out** at export (sample-accurate via AudioContext gain scheduling)
 
@@ -65,12 +72,20 @@ Create stunning YouTube Shorts & Instagram Reels featuring video game music with
 - **MP4** (H.264/AAC via FFmpeg) or **WebM** (VP9/Opus)
 - 3 quality presets: High (20 Mbps), Medium (12 Mbps), Draft (6 Mbps)
 - **Waveform scrubber** to select export segment visually
+- **Detailed export progress** — percentage, elapsed time, estimated time remaining
+- **Stop export** — cancel an in-progress export instantly, no save dialog
 - **Thumbnail export** — save current frame as PNG
 - 1080×1920 native resolution (9:16)
 - ElevenLabs TTS voice included in exported audio
 
 ### 🔍 Game Search
 - **IGDB search** (via Twitch API) — auto-fills game name, studio, year, and cover art (up to 20 results with platform info)
+- **Error feedback** — clear message if IGDB credentials are missing or invalid
+
+### 💾 Projects
+- Save/Load as JSON (Ctrl+S / Ctrl+O)
+- **Recent projects panel** — quick access to last opened projects
+- **Credentials persisted** — ElevenLabs & Twitch API keys saved across sessions
 
 ### ⌨️ Keyboard Shortcuts
 | Key | Action |
@@ -83,10 +98,6 @@ Create stunning YouTube Shorts & Instagram Reels featuring video game music with
 | `Ctrl+Y` | Redo |
 | `Ctrl+S` | Save project |
 | `Ctrl+O` | Load project |
-
-### 💾 Projects
-- Save/Load as JSON (Ctrl+S / Ctrl+O)
-- **Credentials persisted** — ElevenLabs & Twitch API keys saved across sessions
 
 ---
 
@@ -150,13 +161,13 @@ vgm-vinyl-creator/
 ├── src/
 │   ├── engine/
 │   │   ├── CanvasRenderer.js  # Mono-canvas renderer (all visuals)
-│   │   ├── AudioAnalyzer.js   # Web Audio API — analysis + GainNode chain (fades + ducking)
+│   │   ├── AudioAnalyzer.js   # Web Audio API — analysis + GainNode chain (fades + ducking + normalization)
 │   │   ├── VideoExporter.js   # MediaRecorder + FFmpeg pipeline
 │   │   └── waveform.worker.js # Off-thread waveform generation
 │   ├── ui/
 │   │   ├── ControlPanel.jsx   # Collapsible sidebar — all controls
 │   │   └── PreviewTimeline.jsx # Interactive timeline with drag handles
-│   ├── styleTemplates.js      # 6 style presets (standalone, no circular deps)
+│   ├── styleTemplates.js      # 14 style presets (standalone, no circular deps)
 │   ├── App.jsx                # Main orchestrator
 │   └── main.jsx               # React entry point
 ├── index.html
@@ -169,7 +180,7 @@ vgm-vinyl-creator/
 - **Mono-canvas rendering** — everything (background, blob, EQ, vinyl, particles, card, hook, scanlines) on a single 1080×1920 Canvas 2D. Export fidelity guaranteed.
 - **captureStream(0) + manual requestFrame()** — prevents encoder lag by signaling new frames only after each render completes.
 - **VP9 → FFmpeg H.264 pipeline** — MediaRecorder captures VP9 WebM, FFmpeg converts to MP4 H.264 for universal compatibility.
-- **Single AudioContext + GainNode chain** — `source → analyzer → gainNode (fades) → duckNode (TTS ducking) → destination + exportDest`. Fresh `MediaElementSource` for each ElevenLabs export to bypass single-connection limitation.
+- **Single AudioContext + GainNode chain** — `source → analyzer → gainNode (fades) → normNode (normalization) → duckNode (TTS ducking) → destination + exportDest`. Fresh `MediaElementSource` for each ElevenLabs export to bypass single-connection limitation.
 - **Direct DOM refs for progress/timeline** — 60fps cursor updates without React re-renders, drag state managed via refs to avoid stale closures.
 - **Beat detection via transient analysis** — fast average (8 frames) vs slow average (60 frames) detects energy spikes above baseline rather than absolute loudness thresholds.
 - **Crash-proof render loop** — rAF rescheduled before drawing so a runtime error in any draw function never permanently kills the animation.
@@ -190,28 +201,19 @@ vgm-vinyl-creator/
 
 ---
 
-## 📝 Roadmap
+## 📝 Changelog
 
-- [x] Waveform scrubber for segment selection
-- [x] 6 info card styles (Full Width, Glass, Minimal, Neon, Split, Cinematic)
-- [x] 6 style templates
-- [x] Color filters & vignette
-- [x] Gameplay color filters (brightness/contrast/saturation/hue)
-- [x] Hook intro with TTS (system + ElevenLabs)
-- [x] After-hook subtitle overlay
-- [x] Hook → card transition animation
-- [x] Beat-sync auto effects + burst particles
-- [x] Music ducking during TTS
-- [x] Audio fade in/out at export
-- [x] Interactive visual timeline with drag handles
-- [x] Gameplay & background video trim
-- [x] Thumbnail export (PNG)
-- [x] Logo / watermark overlay
-- [x] Undo / Redo (60 states)
-- [x] Packaged .exe installer
-- [ ] Animated intro (zoom vinyl + glitch)
-- [ ] Theme presets (Hotline Miami, Zelda, Sonic, Doom…)
-- [ ] Recent projects history on launch
+### Latest
+- **14 style templates** — 8 new generalist themes (Cyberpunk, Dark Fantasy, Vaporwave, Horror, Zen Garden, Jazz Club, Deep Space, Pastel Dream)
+- **Polaroid card style** — photo card with white border, tilt effect
+- **Vinyl intro animation** — zoom + glitch on arrival, synced after hook, duration slider
+- **Audio normalization** — peak normalization to -1 dBFS, toggleable with dB display
+- **Export progress** — elapsed time + estimated time remaining
+- **Stop export** — cancel in-progress export instantly
+- **Recent projects panel** — quick access to last opened projects
+- **Keyboard shortcuts panel** — `?` button in header
+- **IGDB error feedback** — clear error messages on failed game search
+- **Credentials persistence** — API keys saved across sessions
 
 ---
 

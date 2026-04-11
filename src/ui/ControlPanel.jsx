@@ -284,7 +284,7 @@ const SHORTCUTS = [
 
 export default function ControlPanel({
   config, onConfigChange, onLoadAudio, onLoadCover, onLoadBackground, onLoadGameImage, onLoadGameplay, onLoadWatermark,
-  onExport, isExporting, exportProgress, exportPhase,
+  onExport, onCancelExport, isExporting, exportProgress, exportPhase, exportStartTime,
   audioName, coverName, bgName, gameImageName, gameplayName, gameplayDuration, bgDuration,
   audioDuration, waveformData,
   normGain,
@@ -304,6 +304,15 @@ export default function ControlPanel({
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
   const [elPreviewLoading, setElPreviewLoading] = useState(false);
+  const [exportElapsed, setExportElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!isExporting || !exportStartTime) { setExportElapsed(0); return; }
+    const tick = () => setExportElapsed(Math.floor((Date.now() - exportStartTime) / 1000));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [isExporting, exportStartTime]);
 
   const fetchElVoices = useCallback(async (key) => {
     if (!key) return;
@@ -1363,36 +1372,69 @@ export default function ControlPanel({
             onChange={e => set('exportFadeOut', parseFloat(e.target.value))} />
         </div>
 
-        {/* Export button */}
-        <button
-          onClick={onExport}
-          disabled={isExporting}
-          style={{
-            width: '100%', padding: '13px', borderRadius: 11, border: 'none',
-            background: isExporting
-              ? 'rgba(255,255,255,0.08)'
-              : `linear-gradient(135deg, ${config.accentColor} 0%, ${config.secondaryColor} 100%)`,
-            color: '#fff', fontSize: 14, fontWeight: 700, cursor: isExporting ? 'wait' : 'pointer',
-            fontFamily: "'Outfit',sans-serif", letterSpacing: '0.02em',
-            transition: 'transform 0.15s, box-shadow 0.15s',
-          }}
-          onMouseEnter={e => { if (!isExporting) { e.target.style.transform = 'scale(1.02)'; e.target.style.boxShadow = `0 4px 24px ${config.accentColor}40`; }}}
-          onMouseLeave={e => { e.target.style.transform = 'scale(1)'; e.target.style.boxShadow = 'none'; }}
-        >
-          {isExporting
-            ? `${exportPhase === 'converting' ? '🔄 Converting' : exportPhase === 'saving' ? '💾 Saving' : '⏺ Recording'}... ${Math.round(exportProgress * 100)}%`
-            : `⬇ Export ${(config.exportFormat || 'mp4').toUpperCase()}`}
-        </button>
+        {/* Export button + Stop */}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={onExport}
+            disabled={isExporting}
+            style={{
+              flex: 1, padding: '13px', borderRadius: 11, border: 'none',
+              background: isExporting
+                ? 'rgba(255,255,255,0.08)'
+                : `linear-gradient(135deg, ${config.accentColor} 0%, ${config.secondaryColor} 100%)`,
+              color: '#fff', fontSize: 14, fontWeight: 700, cursor: isExporting ? 'wait' : 'pointer',
+              fontFamily: "'Outfit',sans-serif", letterSpacing: '0.02em',
+              transition: 'transform 0.15s, box-shadow 0.15s',
+            }}
+            onMouseEnter={e => { if (!isExporting) { e.target.style.transform = 'scale(1.02)'; e.target.style.boxShadow = `0 4px 24px ${config.accentColor}40`; }}}
+            onMouseLeave={e => { e.target.style.transform = 'scale(1)'; e.target.style.boxShadow = 'none'; }}
+          >
+            {isExporting
+              ? `${exportPhase === 'converting' ? '🔄 Converting' : exportPhase === 'saving' ? '💾 Saving' : '⏺ Recording'}...`
+              : `⬇ Export ${(config.exportFormat || 'mp4').toUpperCase()}`}
+          </button>
+          {isExporting && (
+            <button
+              onClick={onCancelExport}
+              style={{
+                padding: '13px 16px', borderRadius: 11, border: '1px solid rgba(239,68,68,0.4)',
+                background: 'rgba(239,68,68,0.12)', color: '#f87171',
+                fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                fontFamily: "'Outfit',sans-serif", transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => e.target.style.background = 'rgba(239,68,68,0.25)'}
+              onMouseLeave={e => e.target.style.background = 'rgba(239,68,68,0.12)'}
+            >
+              ✕ Stop
+            </button>
+          )}
+        </div>
 
-        {isExporting && (
-          <div style={{ width: '100%', height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-            <div style={{
-              width: `${exportProgress * 100}%`, height: '100%', borderRadius: 2,
-              background: `linear-gradient(90deg, ${config.accentColor}, ${config.secondaryColor})`,
-              transition: 'width 0.2s',
-            }} />
-          </div>
-        )}
+        {isExporting && (() => {
+          const pct = Math.round(exportProgress * 100);
+          const eta = exportElapsed > 0 && exportProgress > 0.02
+            ? Math.round(exportElapsed / exportProgress * (1 - exportProgress))
+            : null;
+          const fmtTime = s => s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, '0')}s`;
+          return (
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {/* Barre de progression */}
+              <div style={{ width: '100%', height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                <div style={{
+                  width: `${pct}%`, height: '100%', borderRadius: 3,
+                  background: `linear-gradient(90deg, ${config.accentColor}, ${config.secondaryColor || config.accentColor})`,
+                  transition: 'width 0.3s',
+                }} />
+              </div>
+              {/* Stats */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'rgba(241,240,245,0.5)', fontFamily: "'Space Mono',monospace" }}>
+                <span>{pct}%</span>
+                <span style={{ color: 'rgba(241,240,245,0.3)' }}>écoulé {fmtTime(exportElapsed)}</span>
+                {eta !== null && <span>~{fmtTime(eta)} restant</span>}
+              </div>
+            </div>
+          );
+        })()}
       </Section>
 
       {/* ══════════════════════════════════════ */}

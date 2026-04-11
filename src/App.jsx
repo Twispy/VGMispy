@@ -87,6 +87,7 @@ export default function App() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [exportPhase, setExportPhase] = useState('');
+  const [exportStartTime, setExportStartTime] = useState(null);
   const [loopPreview, setLoopPreview] = useState(false);
   const loopPreviewRef = useRef(false);
   const hookVoiceRef = useRef(null);       // HTMLAudioElement for ElevenLabs hook audio
@@ -695,6 +696,12 @@ export default function App() {
   // ══════════════════════════════════════════
   // EXPORT
   // ══════════════════════════════════════════
+  const handleCancelExport = useCallback(() => {
+    exporterRef.current?.cancelExport();
+    audioRef.current?.pause();
+    setIsPlaying(false);
+  }, []);
+
   const handleExport = useCallback(async () => {
     const renderer = rendererRef.current;
     const audio = audioRef.current;
@@ -711,6 +718,7 @@ export default function App() {
 
     setIsExporting(true);
     setExportProgress(0);
+    setExportStartTime(Date.now());
 
     // Pre-generate ElevenLabs TTS and connect a fresh Audio element to the export stream
     let ttsExportEl = null;
@@ -760,6 +768,7 @@ export default function App() {
       onComplete: (result) => {
         setIsExporting(false);
         setExportPhase('');
+        setExportStartTime(null);
         audio.pause();
         setIsPlaying(false);
         if (result.success) {
@@ -1211,9 +1220,11 @@ export default function App() {
         onLoadWatermark={handleLoadWatermark}
         onLoadGameplay={handleLoadGameplay}
         onExport={handleExport}
+        onCancelExport={handleCancelExport}
         isExporting={isExporting}
         exportProgress={exportProgress}
         exportPhase={exportPhase}
+        exportStartTime={exportStartTime}
         audioName={audioName}
         coverName={coverName}
         bgName={bgName}

@@ -26,6 +26,7 @@ export function createExporter() {
   let completeCallback = null;
   let progressInterval = null;
   let onStopCleanup = null;
+  let cancelled = false;
 
   /**
    * @param {MediaStream} videoStream - From renderer.getStream()
@@ -48,6 +49,7 @@ export function createExporter() {
     completeCallback = callbacks.onComplete || (() => {});
 
     chunks = [];
+    cancelled = false;
     phaseCallback('recording');
 
     // ── Combine video + audio ──
@@ -82,6 +84,7 @@ export function createExporter() {
     };
 
     mediaRecorder.onstop = async () => {
+      if (cancelled) return;
       const blob = new Blob(chunks, { type: 'video/webm' });
       console.log('📦 WebM blob:', (blob.size / 1024 / 1024).toFixed(1), 'MB');
 
@@ -182,10 +185,11 @@ export function createExporter() {
   }
 
   function cancelExport() {
+    cancelled = true;
     stopExport();
     chunks = [];
+    if (onStopCleanup) { onStopCleanup(); onStopCleanup = null; }
     phaseCallback('');
-    if (onStopCleanup) onStopCleanup();
     completeCallback({ success: false, error: 'Cancelled' });
   }
 
