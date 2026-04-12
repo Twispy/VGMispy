@@ -34,6 +34,7 @@ const DEFAULT_CONFIG = {
   bgColor: '#0d0d1a',
   showHookIntro: false,
   hookText: "You forgot this masterpiece...",
+  hookTextFontSize: 42,
   hookDuration: 5,
   hookOverlayOpacity: 0.85,
   afterHookEnabled: false,
@@ -90,6 +91,8 @@ export default function App() {
   const [exportStartTime, setExportStartTime] = useState(null);
   const [loopPreview, setLoopPreview] = useState(false);
   const loopPreviewRef = useRef(false);
+  const [safeZoneMode, setSafeZoneMode] = useState(null); // null | 'tiktok' | 'shorts'
+  const [canvasDisplaySize, setCanvasDisplaySize] = useState({ w: 0, h: 0 });
   const hookVoiceRef = useRef(null);       // HTMLAudioElement for ElevenLabs hook audio
   const hookVoiceCacheRef = useRef(null);  // { key, url } – avoid regenerating same audio
   const triggerHookTTSRef = useRef(null);  // callable from rAF loop for loop-triggered TTS
@@ -274,6 +277,7 @@ export default function App() {
       canvas.style.borderRadius = '6px';
       canvas.style.cursor = 'pointer';
       canvas.style.boxShadow = '0 0 80px rgba(0,0,0,0.6)';
+      setCanvasDisplaySize({ w: displayW, h: displayH });
     }
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
@@ -1044,6 +1048,206 @@ export default function App() {
           position: 'relative',
         }}
       >
+        {/* ── Safe Zone buttons ── */}
+        <div style={{
+          position: 'absolute', top: 16, left: '50%',
+          transform: 'translateX(calc(-50% - 160px))',
+          zIndex: 60, display: 'flex', gap: 6,
+        }}>
+          {[{ id: 'tiktok', label: '🎵 TikTok' }, { id: 'shorts', label: '▶ Shorts' }].map(({ id, label }) => {
+            const active = safeZoneMode === id;
+            return (
+              <button key={id} onClick={() => setSafeZoneMode(active ? null : id)} style={{
+                padding: '4px 12px', fontSize: 11, cursor: 'pointer', borderRadius: 6,
+                fontFamily: "'Space Mono', monospace",
+                background: active ? `${config.accentColor || '#a78bfa'}30` : 'rgba(255,255,255,0.06)',
+                border: `1px solid ${active ? config.accentColor || '#a78bfa' : 'rgba(255,255,255,0.15)'}`,
+                color: active ? config.accentColor || '#a78bfa' : 'rgba(255,255,255,0.35)',
+              }}>{label}</button>
+            );
+          })}
+        </div>
+
+        {/* ── Safe Zone overlay (preview only, never exported) ── */}
+        {safeZoneMode && canvasDisplaySize.w > 0 && (() => {
+          const { w, h } = canvasDisplaySize;
+          const s = w / 1080; // scale factor
+          const px = n => Math.round(n * s);
+          const sp = (size, weight = 400) => ({
+            fontSize: px(size), fontWeight: weight,
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            lineHeight: 1.2,
+          });
+          const mono = { fontFamily: "'Space Mono', monospace" };
+
+          if (safeZoneMode === 'tiktok') {
+            return (
+              <div style={{ position: 'absolute', width: w, height: h, pointerEvents: 'none', zIndex: 55, overflow: 'hidden', borderRadius: 6 }}>
+                {/* Bottom gradient */}
+                <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: px(700),
+                  background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.5) 50%, transparent 100%)',
+                }} />
+
+                {/* Top bar */}
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: px(90),
+                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.5), transparent)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: `0 ${px(32)}px`, boxSizing: 'border-box',
+                }}>
+                  <span style={{ color: '#fff', ...sp(36) }}>←</span>
+                  <div style={{ display: 'flex', gap: px(40), alignItems: 'center' }}>
+                    {['Abonnements', 'Pour toi'].map((t, i) => (
+                      <span key={t} style={{ color: i === 1 ? '#fff' : 'rgba(255,255,255,0.6)', ...sp(28, i === 1 ? 700 : 400) }}>{t}</span>
+                    ))}
+                  </div>
+                  <span style={{ color: '#fff', ...sp(32) }}>🔍</span>
+                </div>
+                {/* Tab underline */}
+                <div style={{ position: 'absolute', top: px(82), left: '50%', transform: 'translateX(-50%)', width: px(80), height: px(3), background: '#fff', borderRadius: 2 }} />
+
+                {/* Right side buttons */}
+                {[
+                  { icon: '🧡', label: '142K' },
+                  { icon: '💬', label: '1824' },
+                  { icon: '🔖', label: 'Enreg.' },
+                  { icon: '↗', label: 'Partager' },
+                  { icon: '⋯', label: '' },
+                ].map(({ icon, label }, i) => (
+                  <div key={i} style={{
+                    position: 'absolute', right: px(20),
+                    bottom: px(300 + (4 - i) * 145),
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: px(6),
+                  }}>
+                    {i === 0 && (
+                      <div style={{ width: px(64), height: px(64), borderRadius: '50%', background: '#555', border: `${px(3)}px solid #fff`, marginBottom: px(4), overflow: 'hidden' }}>
+                        <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg,#888,#444)' }} />
+                      </div>
+                    )}
+                    <div style={{ width: px(54), height: px(54), borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ ...sp(28) }}>{icon}</span>
+                    </div>
+                    {label && <span style={{ color: '#fff', ...sp(22, 600) }}>{label}</span>}
+                  </div>
+                ))}
+
+                {/* Bottom info */}
+                <div style={{ position: 'absolute', bottom: px(100), left: px(20), right: px(130), display: 'flex', flexDirection: 'column', gap: px(12) }}>
+                  <span style={{ color: '#fff', ...sp(32, 700) }}>@twispy_vgm</span>
+                  <span style={{ color: 'rgba(255,255,255,0.9)', ...sp(28) }}>🎮 Tu te souviens de cette musique ? 👇</span>
+                  <span style={{ color: 'rgba(255,255,255,0.7)', ...sp(26) }}>#vgm #nostalgie #gaming</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: px(12), marginTop: px(4) }}>
+                    <span style={{ ...sp(24) }}>🎵</span>
+                    <span style={{ color: '#fff', ...sp(24) }}>Son original – twispy_vgm</span>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div style={{ position: 'absolute', bottom: px(10), left: 0, width: '100%', height: px(3), background: 'rgba(255,255,255,0.3)' }}>
+                  <div style={{ width: '45%', height: '100%', background: '#fff' }} />
+                </div>
+
+                {/* Bottom nav bar */}
+                <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: px(90),
+                  background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'space-around',
+                  borderTop: '1px solid rgba(255,255,255,0.1)',
+                }}>
+                  {[{ icon: '🏠', label: 'Accueil' }, { icon: '🔍', label: 'Recherche' }, { icon: null, label: null }, { icon: '📥', label: 'Boîte' }, { icon: '👤', label: 'Profil' }].map(({ icon, label }, i) =>
+                    i === 2 ? (
+                      <div key={i} style={{ width: px(88), height: px(48), borderRadius: px(12), background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ color: '#000', ...sp(30, 700) }}>+</span>
+                      </div>
+                    ) : (
+                      <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: px(4) }}>
+                        <span style={{ ...sp(28) }}>{icon}</span>
+                        <span style={{ color: i === 0 ? '#fff' : 'rgba(255,255,255,0.5)', ...sp(18) }}>{label}</span>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            );
+          }
+
+          if (safeZoneMode === 'shorts') {
+            return (
+              <div style={{ position: 'absolute', width: w, height: h, pointerEvents: 'none', zIndex: 55, overflow: 'hidden', borderRadius: 6 }}>
+                {/* Bottom gradient */}
+                <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: px(600),
+                  background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 55%, transparent 100%)',
+                }} />
+
+                {/* Top bar */}
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: px(100),
+                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.6), transparent)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: `0 ${px(28)}px`, boxSizing: 'border-box',
+                }}>
+                  <span style={{ color: '#fff', ...sp(38) }}>←</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: px(12) }}>
+                    <span style={{ color: '#fff', ...sp(28, 700) }}>Shorts</span>
+                  </div>
+                  <span style={{ color: '#fff', ...sp(32) }}>⋯</span>
+                </div>
+
+                {/* Right side buttons */}
+                {[
+                  { icon: '👍', label: '24K' },
+                  { icon: '👎', label: '' },
+                  { icon: '💬', label: '312' },
+                  { icon: '↗', label: 'Partager' },
+                  { icon: '⋯', label: '' },
+                ].map(({ icon, label }, i) => (
+                  <div key={i} style={{
+                    position: 'absolute', right: px(16),
+                    bottom: px(280 + (4 - i) * 140),
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: px(6),
+                  }}>
+                    <div style={{ width: px(56), height: px(56), borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ ...sp(30) }}>{icon}</span>
+                    </div>
+                    {label && <span style={{ color: '#fff', ...sp(22, 600) }}>{label}</span>}
+                  </div>
+                ))}
+
+                {/* Bottom info */}
+                <div style={{ position: 'absolute', bottom: px(100), left: px(20), right: px(130), display: 'flex', flexDirection: 'column', gap: px(14) }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: px(16) }}>
+                    <div style={{ width: px(52), height: px(52), borderRadius: '50%', background: 'linear-gradient(135deg,#888,#444)', border: `${px(2)}px solid rgba(255,255,255,0.3)` }} />
+                    <span style={{ color: '#fff', ...sp(30, 700) }}>twispy_vgm</span>
+                    <div style={{ padding: `${px(8)}px ${px(22)}px`, borderRadius: px(20), border: '1.5px solid #fff' }}>
+                      <span style={{ color: '#fff', ...sp(24, 600) }}>S'abonner</span>
+                    </div>
+                  </div>
+                  <span style={{ color: 'rgba(255,255,255,0.9)', ...sp(28) }}>🎮 Tu te souviens de cette musique ?</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: px(10) }}>
+                    <span style={{ ...sp(22) }}>🎵</span>
+                    <span style={{ color: 'rgba(255,255,255,0.7)', ...sp(24) }}>Son original</span>
+                  </div>
+                </div>
+
+                {/* Progress bar (YouTube red) */}
+                <div style={{ position: 'absolute', bottom: px(90), left: 0, width: '100%', height: px(3), background: 'rgba(255,255,255,0.2)' }}>
+                  <div style={{ width: '35%', height: '100%', background: '#FF0000' }} />
+                  <div style={{ position: 'absolute', top: '50%', left: '35%', transform: 'translate(-50%,-50%)', width: px(16), height: px(16), borderRadius: '50%', background: '#FF0000' }} />
+                </div>
+
+                {/* Bottom nav */}
+                <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: px(90),
+                  background: '#0f0f0f', display: 'flex', alignItems: 'center', justifyContent: 'space-around',
+                  borderTop: '1px solid rgba(255,255,255,0.08)',
+                }}>
+                  {[{ icon: '🏠', label: 'Accueil' }, { icon: '🔍', label: 'Explore' }, { icon: '➕', label: '' }, { icon: '📚', label: 'Abonnem.' }, { icon: '👤', label: 'Vous' }].map(({ icon, label }, i) => (
+                    <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: px(4) }}>
+                      <span style={{ ...sp(i === 2 ? 38 : 28) }}>{icon}</span>
+                      {label && <span style={{ color: i === 0 ? '#fff' : 'rgba(255,255,255,0.5)', ...sp(18) }}>{label}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+        })()}
+
         {/* Play hint */}
         {audioRef.current && !isPlaying && (
           <div style={{

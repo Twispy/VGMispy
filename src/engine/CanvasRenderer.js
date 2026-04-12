@@ -1766,9 +1766,26 @@ export function createRenderer(canvas) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    const textW = ctx.measureText(visible).width;
-    const badgeW = textW + padX * 2;
-    const badgeH = fontSize + padY * 2;
+    // Word-wrap visible text
+    const maxTextW = W - 120;
+    const visibleWords = visible.split(' ');
+    const wrappedLines = [];
+    let curLine = '';
+    for (const w of visibleWords) {
+      const test = curLine ? `${curLine} ${w}` : w;
+      if (ctx.measureText(test).width > maxTextW && curLine) {
+        wrappedLines.push(curLine);
+        curLine = w;
+      } else {
+        curLine = test;
+      }
+    }
+    if (curLine) wrappedLines.push(curLine);
+
+    const lineH = fontSize * 1.35;
+    const maxLineW = Math.max(...wrappedLines.map(l => ctx.measureText(l).width));
+    const badgeW = Math.min(maxLineW + padX * 2, W - 40);
+    const badgeH = wrappedLines.length * lineH + padY * 2;
     const badgeX = CX - badgeW / 2;
     const badgeY = baseY - badgeH / 2;
 
@@ -1779,7 +1796,7 @@ export function createRenderer(canvas) {
     ctx.roundRect(badgeX, badgeY, badgeW, badgeH, radius);
     ctx.fill();
 
-    // Accent bottom border line
+    // Accent border
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = accent;
     ctx.lineWidth = 3;
@@ -1787,12 +1804,15 @@ export function createRenderer(canvas) {
     ctx.roundRect(badgeX, badgeY, badgeW, badgeH, radius);
     ctx.stroke();
 
-    // Text
+    // Text lines
     ctx.globalAlpha = alpha;
     ctx.fillStyle = fontColor;
     ctx.shadowColor = accent;
     ctx.shadowBlur = 10;
-    ctx.fillText(visible, CX, baseY);
+    const textStartY = baseY - (wrappedLines.length - 1) * lineH / 2;
+    wrappedLines.forEach((l, i) => {
+      ctx.fillText(l, CX, textStartY + i * lineH);
+    });
     ctx.shadowBlur = 0;
 
     // Progress dots (which line we're on)
@@ -1817,35 +1837,74 @@ export function createRenderer(canvas) {
 
   function drawHookPhaseText(font, fontColor, progress) {
     const hookText = config.hookText || "You forgot this masterpiece...";
-    const posY = H * (config.hookPositionY ?? 0.45);
+    const fontSize = config.hookTextFontSize ?? 42;
+    const lineHeight = fontSize * 1.4;
+    const maxWidth = W - 120; // 60px padding each side
 
-    const charsToShow = Math.floor(progress * hookText.length * 1.2);
-    const visibleText = hookText.substring(0, Math.min(charsToShow, hookText.length));
-    const flickering = charsToShow <= hookText.length && Math.random() > 0.7;
-
-    // RGB split
-    if (progress < 0.8) {
-      ctx.globalAlpha = 0.15;
-      ctx.font = `600 42px ${font}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#ff0040';
-      ctx.fillText(visibleText, CX + 2, posY);
-      ctx.fillStyle = '#00aaff';
-      ctx.fillText(visibleText, CX - 2, posY);
-    }
-
-    ctx.globalAlpha = flickering ? 0.5 : 1;
-    ctx.fillStyle = fontColor;
-    ctx.font = `600 42px ${font}`;
+    ctx.font = `600 ${fontSize}px ${font}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(visibleText, CX, posY);
 
-    // Cursor
-    if (charsToShow <= hookText.length && Math.floor(time * 4) % 2 === 0) {
-      const cursorX = CX + ctx.measureText(visibleText).width / 2 + 4;
-      ctx.fillRect(cursorX, posY - 16, 3, 32);
+    // Pre-compute wrapped lines from full text
+    const words = hookText.split(' ');
+    const wrappedLines = [];
+    let currentLine = '';
+    for (const word of words) {
+      const test = currentLine ? `${currentLine} ${word}` : word;
+      if (ctx.measureText(test).width > maxWidth && currentLine) {
+        wrappedLines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = test;
+      }
+    }
+    if (currentLine) wrappedLines.push(currentLine);
+
+    const totalChars = hookText.length;
+    const charsToShow = Math.floor(progress * totalChars * 1.2);
+    const visibleChars = Math.min(charsToShow, totalChars);
+    const flickering = charsToShow <= totalChars && Math.random() > 0.7;
+
+    // Determine which lines/chars are visible
+    const totalHeight = wrappedLines.length * lineHeight;
+    const startY = H * (config.hookPositionY ?? 0.45) - totalHeight / 2 + lineHeight / 2;
+
+    let charsLeft = visibleChars;
+    // Last visible line index (for cursor placement)
+    let lastLineIdx = 0;
+    let lastLineVisible = '';
+
+    for (let i = 0; i < wrappedLines.length; i++) {
+      if (charsLeft <= 0) break;
+      const lineText = wrappedLines[i];
+      const visibleLine = lineText.substring(0, charsLeft);
+      charsLeft -= lineText.length;
+      lastLineIdx = i;
+      lastLineVisible = visibleLine;
+
+      const lineY = startY + i * lineHeight;
+
+      // RGB split
+      if (progress < 0.8) {
+        ctx.globalAlpha = 0.15;
+        ctx.fillStyle = '#ff0040';
+        ctx.fillText(visibleLine, CX + 2, lineY);
+        ctx.fillStyle = '#00aaff';
+        ctx.fillText(visibleLine, CX - 2, lineY);
+      }
+
+      ctx.globalAlpha = flickering ? 0.5 : 1;
+      ctx.fillStyle = fontColor;
+      ctx.fillText(visibleLine, CX, lineY);
+    }
+
+    // Cursor on last visible line
+    if (charsToShow <= totalChars && Math.floor(time * 4) % 2 === 0) {
+      const cursorLineY = startY + lastLineIdx * lineHeight;
+      const cursorX = CX + ctx.measureText(lastLineVisible).width / 2 + 4;
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = fontColor;
+      ctx.fillRect(cursorX, cursorLineY - fontSize / 2, 3, fontSize);
     }
 
     // Fade out at end

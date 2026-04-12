@@ -2,6 +2,12 @@
    VGM VINYL CREATOR — Global Styles
    ═══════════════════════════════════════════ */
 
+/* ── Select / Option dark theme ── */
+option {
+  background-color: #0d0d18;
+  color: #f1f0f5;
+}
+
 :root {
   /* ── Core palette ── */
   --bg-deep: #06060c;

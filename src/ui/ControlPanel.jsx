@@ -184,20 +184,37 @@ function WaveformScrubber({ waveformData, duration, start, end, onChange, accent
 // COLLAPSIBLE SECTION
 // ══════════════════════════════════════════
 
-function Section({ title, icon, defaultOpen = false, children, accentColor }) {
-  const [open, setOpen] = useState(defaultOpen);
+const NAV_H = 42; // height of the sticky nav bar in px
+
+const SECTIONS = [
+  { id: 'media',      icon: '📁', title: 'Media',      defaultOpen: true,  color: '#60a5fa' },
+  { id: 'track',      icon: '🎵', title: 'Track Info', defaultOpen: true,  color: '#f472b6' },
+  { id: 'layout',     icon: '📐', title: 'Layout',     defaultOpen: false, color: '#34d399' },
+  { id: 'hook',       icon: '🎬', title: 'Hook Intro', defaultOpen: false, color: '#fb923c' },
+  { id: 'appearance', icon: '🎨', title: 'Appearance', defaultOpen: false, color: '#e879f9' },
+  { id: 'effects',    icon: '⚡', title: 'Effects',    defaultOpen: false, color: '#facc15' },
+  { id: 'export',     icon: '⬇', title: 'Export',     defaultOpen: false, color: '#4ade80' },
+  { id: 'settings',   icon: '⚙', title: 'Settings',   defaultOpen: false, color: '#94a3b8' },
+];
+
+function Section({ id, title, icon, open, onToggle, sectionRef, children, accentColor }) {
   return (
-    <div style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+    <div ref={sectionRef} id={`section-${id}`} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
       <div
-        onClick={() => setOpen(!open)}
+        onClick={onToggle}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '10px 18px', cursor: 'pointer', userSelect: 'none',
           transition: 'background 0.15s',
-          background: open ? 'rgba(255,255,255,0.02)' : 'transparent',
+          background: open ? 'rgba(8,8,20,0.97)' : 'transparent',
+          position: 'sticky', top: NAV_H, zIndex: 10,
+          backdropFilter: open ? 'blur(12px)' : 'none',
+          WebkitBackdropFilter: open ? 'blur(12px)' : 'none',
+          borderBottom: open ? `1px solid ${accentColor || 'rgba(255,255,255,0.12)'}` : 'none',
+          boxShadow: open ? '0 4px 16px rgba(0,0,0,0.5)' : 'none',
         }}
         onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
-        onMouseLeave={e => e.currentTarget.style.background = open ? 'rgba(255,255,255,0.02)' : 'transparent'}
+        onMouseLeave={e => e.currentTarget.style.background = open ? 'rgba(8,8,20,0.97)' : 'transparent'}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 14 }}>{icon}</span>
@@ -303,6 +320,18 @@ export default function ControlPanel({
   const [elVoicesError, setElVoicesError] = useState('');
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
+  const [openSections, setOpenSections] = useState(() =>
+    Object.fromEntries(SECTIONS.map(s => [s.id, s.defaultOpen]))
+  );
+  const sectionRefs = useRef({});
+  const toggleSection = (id) => {
+    setOpenSections(prev => ({ ...prev, [id]: !prev[id] }));
+    if (!openSections[id]) {
+      setTimeout(() => {
+        sectionRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 30);
+    }
+  };
   const [elPreviewLoading, setElPreviewLoading] = useState(false);
   const [exportElapsed, setExportElapsed] = useState(0);
 
@@ -414,12 +443,37 @@ export default function ControlPanel({
         )}
       </div>
 
+      {/* ── Section nav bar ── */}
+      <div style={{
+        position: 'sticky', top: 0, zIndex: 20,
+        background: 'rgba(8,8,20,0.97)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+        height: NAV_H, padding: '0 6px',
+      }}>
+        {SECTIONS.map(({ id, icon, title, color }) => {
+          const isOpen = openSections[id];
+          return (
+            <button key={id} onClick={() => toggleSection(id)} title={title} style={{
+              background: isOpen ? `${color}28` : 'transparent',
+              border: isOpen ? `1px solid ${color}70` : '1px solid transparent',
+              borderRadius: 7, width: 32, height: 30,
+              cursor: 'pointer', fontSize: 17,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              opacity: isOpen ? 1 : 0.35,
+              transition: 'all 0.15s',
+              boxShadow: isOpen ? `0 0 8px ${color}44` : 'none',
+            }}>{icon}</button>
+          );
+        })}
+      </div>
+
       {/* ══════════════════════════════════════ */}
       {/* MEDIA */}
       {/* ══════════════════════════════════════ */}
-      <Section title="Media" icon="📁" defaultOpen={true} accentColor={config.accentColor}>
+      <Section id="media" title="Media" icon="📁" open={openSections.media} onToggle={() => toggleSection('media')} sectionRef={el => sectionRefs.current.media = el} accentColor={config.accentColor}>
         <div>
-          <input ref={audioRef} type="file" accept="audio/*" hidden
+          <input ref={audioRef} type="file" accept="audio/*,.mp3,.wav,.ogg,.flac,.aac,.m4a,.opus,.wma,.aiff,.aif" hidden
             onChange={e => e.target.files[0] && onLoadAudio(e.target.files[0])} />
           <button style={fileBtn} onClick={() => audioRef.current.click()}>🎵 Audio Track</button>
           {audioName && <div style={fileName}>{audioName}</div>}
@@ -431,13 +485,13 @@ export default function ControlPanel({
           {coverName && <div style={fileName}>{coverName}</div>}
         </div>
         <div>
-          <input ref={bgRef} type="file" accept="image/*,video/*" hidden
+          <input ref={bgRef} type="file" accept="image/*,video/*,.mp4,.webm,.mkv,.mov,.avi,.wmv,.flv,.m4v,.jpg,.jpeg,.png,.webp,.gif" hidden
             onChange={e => e.target.files[0] && onLoadBackground(e.target.files[0])} />
           <button style={fileBtn} onClick={() => bgRef.current.click()}>🌄 Background (Image/Video)</button>
           {bgName && <div style={fileName}>{bgName}</div>}
         </div>
         <div>
-          <input ref={gameplayRef} type="file" accept="video/*" hidden
+          <input ref={gameplayRef} type="file" accept="video/*,.mp4,.webm,.mkv,.mov,.avi,.wmv,.flv,.m4v" hidden
             onChange={e => e.target.files[0] && onLoadGameplay(e.target.files[0])} />
           <button style={fileBtn} onClick={() => gameplayRef.current.click()}>🎬 Gameplay Video</button>
           {gameplayName && <div style={fileName}>{gameplayName}</div>}
@@ -447,7 +501,7 @@ export default function ControlPanel({
       {/* ══════════════════════════════════════ */}
       {/* TRACK INFO */}
       {/* ══════════════════════════════════════ */}
-      <Section title="Track Info" icon="🎶" defaultOpen={true} accentColor={config.accentColor}>
+      <Section id="track" title="Track Info" icon="🎶" open={openSections.track} onToggle={() => toggleSection('track')} sectionRef={el => sectionRefs.current.track = el} accentColor={config.accentColor}>
         {/* ── Game Search ── */}
         <div>
           <div style={label}>🔍 Search Game (IGDB)</div>
@@ -527,7 +581,7 @@ export default function ControlPanel({
       {/* ══════════════════════════════════════ */}
       {/* LAYOUT */}
       {/* ══════════════════════════════════════ */}
-      <Section title="Layout" icon="📐" defaultOpen={false} accentColor={config.accentColor}>
+      <Section id="layout" title="Layout" icon="📐" open={openSections.layout} onToggle={() => toggleSection('layout')} sectionRef={el => sectionRefs.current.layout = el} accentColor={config.accentColor}>
         <div style={subHeader(config.accentColor)}>Vinyle</div>
         <div style={{ display: 'flex', gap: 6 }}>
           <Slider accentColor={config.accentColor} lbl="Size" value={config.vinylRadius || 340} min={150} max={450} step={5}
@@ -734,7 +788,7 @@ export default function ControlPanel({
       {/* ══════════════════════════════════════ */}
       {/* HOOK INTRO */}
       {/* ══════════════════════════════════════ */}
-      <Section title="Hook Intro" icon="🎬" defaultOpen={false} accentColor={config.accentColor}>
+      <Section id="hook" title="Hook Intro" icon="🎬" open={openSections.hook} onToggle={() => toggleSection('hook')} sectionRef={el => sectionRefs.current.hook = el} accentColor={config.accentColor}>
         <Toggle accentColor={config.accentColor} label="Activer le Hook Intro" value={config.showHookIntro || false} onChange={v => set('showHookIntro', v)} />
 
         {config.showHookIntro && (
@@ -862,6 +916,8 @@ export default function ControlPanel({
             <Toggle accentColor={config.accentColor} label="🎮 Nom du jeu" value={config.showHookGameName !== false} onChange={v => set('showHookGameName', v)} />
             <Toggle accentColor={config.accentColor} label="📅 Nostalgie" value={config.showHookNostalgia !== false} onChange={v => set('showHookNostalgia', v)} />
 
+            <Slider accentColor={config.accentColor} lbl="Taille du texte" value={config.hookTextFontSize ?? 42} min={20} max={80} step={2} suffix="px"
+              onChange={e => set('hookTextFontSize', parseInt(e.target.value))} />
             <Slider accentColor={config.accentColor} lbl="Position Y" value={Math.round((config.hookPositionY ?? 0.45) * 100)} min={10} max={85} step={1} suffix="%"
               onChange={e => set('hookPositionY', parseInt(e.target.value) / 100)} />
 
@@ -924,7 +980,7 @@ export default function ControlPanel({
       {/* ══════════════════════════════════════ */}
       {/* APPEARANCE */}
       {/* ══════════════════════════════════════ */}
-      <Section title="Appearance" icon="🎨" defaultOpen={false} accentColor={config.accentColor}>
+      <Section id="appearance" title="Appearance" icon="🎨" open={openSections.appearance} onToggle={() => toggleSection('appearance')} sectionRef={el => sectionRefs.current.appearance = el} accentColor={config.accentColor}>
 
         {/* ── Templates ── */}
         <div style={subHeader(config.accentColor)}>Templates</div>
@@ -1208,7 +1264,7 @@ export default function ControlPanel({
       {/* ══════════════════════════════════════ */}
       {/* EFFECTS TIMELINE */}
       {/* ══════════════════════════════════════ */}
-      <Section title="Effects" icon="⚡" defaultOpen={false} accentColor={config.accentColor}>
+      <Section id="effects" title="Effects" icon="⚡" open={openSections.effects} onToggle={() => toggleSection('effects')} sectionRef={el => sectionRefs.current.effects = el} accentColor={config.accentColor}>
         <div style={{ fontSize: 10, color: 'rgba(241,240,245,0.4)', marginBottom: 6 }}>
           Add effects at specific timestamps during playback & export.
         </div>
@@ -1288,7 +1344,7 @@ export default function ControlPanel({
       {/* ══════════════════════════════════════ */}
       {/* EXPORT */}
       {/* ══════════════════════════════════════ */}
-      <Section title="Export" icon="⬇" defaultOpen={false} accentColor={config.accentColor}>
+      <Section id="export" title="Export" icon="⬇" open={openSections.export} onToggle={() => toggleSection('export')} sectionRef={el => sectionRefs.current.export = el} accentColor={config.accentColor}>
         {/* Format */}
         <div>
           <div style={label}>Format</div>
@@ -1440,7 +1496,7 @@ export default function ControlPanel({
       {/* ══════════════════════════════════════ */}
       {/* SETTINGS */}
       {/* ══════════════════════════════════════ */}
-      <Section title="Settings" icon="⚙" defaultOpen={false} accentColor={config.accentColor}>
+      <Section id="settings" title="Settings" icon="⚙" open={openSections.settings} onToggle={() => toggleSection('settings')} sectionRef={el => sectionRefs.current.settings = el} accentColor={config.accentColor}>
         <div>
           <div style={label}>ElevenLabs API Key <span style={{ fontSize: 9, color: 'rgba(241,240,245,0.25)' }}>(elevenlabs.io/profile)</span></div>
           <input style={input} type="password" value={config.elevenLabsKey || ''}
