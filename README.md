@@ -110,8 +110,8 @@ Create stunning YouTube Shorts & Instagram Reels featuring video game music with
 ### Installation
 
 ```bash
-git clone https://github.com/Twispy/vgm-creator.git
-cd vgm-creator
+git clone https://github.com/Twispy/vgmispy.git
+cd vgmispy
 npm install
 ```
 
