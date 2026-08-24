@@ -301,7 +301,7 @@ const SHORTCUTS = [
 
 export default function ControlPanel({
   config, onConfigChange, onLoadAudio, onLoadCover, onLoadBackground, onLoadGameImage, onLoadGameplay, onLoadWatermark,
-  onExport, onCancelExport, isExporting, exportProgress, exportPhase, exportStartTime,
+  onExport, onCancelExport, onFindHighlight, isExporting, exportProgress, exportPhase, exportStartTime,
   audioName, coverName, bgName, gameImageName, gameplayName, gameplayDuration, bgDuration,
   audioDuration, waveformData,
   normGain,
@@ -1394,9 +1394,21 @@ export default function ControlPanel({
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
             <div style={label}>Plage d'export</div>
-            <div style={{ fontSize: 9, color: 'rgba(241,240,245,0.3)', fontFamily: "'Space Mono',monospace" }}>
-              {Math.max(1, (config.exportEnd || audioDuration || 30) - (config.exportStart || 0))}s
-              {audioDuration > 0 ? ` / ${Math.floor(audioDuration / 60)}:${String(audioDuration % 60).padStart(2, '0')}` : ''}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <button
+                onClick={onFindHighlight}
+                disabled={!waveformData}
+                title="Trouve le passage le plus fort/dynamique de ce morceau (heuristique basée sur le volume — pas une vraie compréhension musicale)"
+                style={{
+                  padding: '2px 8px', borderRadius: 6, fontSize: 9, fontWeight: 700,
+                  cursor: waveformData ? 'pointer' : 'not-allowed', opacity: waveformData ? 1 : 0.4,
+                  border: `1px solid ${config.accentColor}40`, background: config.accentColor + '15',
+                  color: config.accentColor, fontFamily: "'Outfit',sans-serif",
+                }}>🎯 Meilleur passage</button>
+              <div style={{ fontSize: 9, color: 'rgba(241,240,245,0.3)', fontFamily: "'Space Mono',monospace" }}>
+                {Math.max(1, (config.exportEnd || audioDuration || 30) - (config.exportStart || 0))}s
+                {audioDuration > 0 ? ` / ${Math.floor(audioDuration / 60)}:${String(audioDuration % 60).padStart(2, '0')}` : ''}
+              </div>
             </div>
           </div>
           <WaveformScrubber

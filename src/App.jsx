@@ -4,6 +4,7 @@ import PreviewTimeline from './ui/PreviewTimeline';
 import { createRenderer } from './engine/CanvasRenderer';
 import { createAudioAnalyzer } from './engine/AudioAnalyzer';
 import { createExporter } from './engine/VideoExporter';
+import { findBestHighlight } from './engine/highlightDetector';
 export { STYLE_TEMPLATES } from './styleTemplates';
 
 const DEFAULT_CONFIG = {
@@ -754,6 +755,17 @@ export default function App() {
     audioRef.current?.pause();
     setIsPlaying(false);
   }, []);
+
+  // Suggest the best export window from the waveform's energy envelope —
+  // keeps the currently selected export duration, just moves start/end.
+  const handleFindHighlight = useCallback(() => {
+    if (!waveformData || !audioDuration) return;
+    const currentDuration = Math.max(1, (config.exportEnd || audioDuration || 30) - (config.exportStart || 0));
+    const result = findBestHighlight(waveformData, audioDuration, currentDuration);
+    if (result) {
+      setConfig(prev => ({ ...prev, exportStart: result.start, exportEnd: result.end }));
+    }
+  }, [waveformData, audioDuration, config.exportStart, config.exportEnd]);
 
   const handleExport = useCallback(async () => {
     const renderer = rendererRef.current;
@@ -1549,6 +1561,7 @@ export default function App() {
         onLoadGameplay={handleLoadGameplay}
         onExport={handleExport}
         onCancelExport={handleCancelExport}
+        onFindHighlight={handleFindHighlight}
         isExporting={isExporting}
         exportProgress={exportProgress}
         exportPhase={exportPhase}
