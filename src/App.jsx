@@ -5,6 +5,7 @@ import { createRenderer } from './engine/CanvasRenderer';
 import { createAudioAnalyzer } from './engine/AudioAnalyzer';
 import { createExporter } from './engine/VideoExporter';
 import { findBestHighlight } from './engine/highlightDetector';
+import { getExportWarnings } from './engine/exportChecklist';
 export { STYLE_TEMPLATES } from './styleTemplates';
 
 const DEFAULT_CONFIG = {
@@ -777,6 +778,14 @@ export default function App() {
       return;
     }
 
+    const warnings = getExportWarnings(config, { coverName, audioDuration, defaults: DEFAULT_CONFIG });
+    if (warnings.length > 0) {
+      const proceed = window.confirm(
+        "⚠️ Avant d'exporter :\n\n" + warnings.map(w => '• ' + w).join('\n') + '\n\nExporter quand même ?'
+      );
+      if (!proceed) return;
+    }
+
     const startTime = config.exportStart || 0;
     const endTime = config.exportEnd || 30;
     const duration = Math.max(1, endTime - startTime);
@@ -856,7 +865,7 @@ export default function App() {
     setTimeout(() => {
       renderer.startFadeOut();
     }, (duration - 1.5) * 1000);
-  }, [config.exportStart, config.exportEnd, config.exportFormat, config.exportQuality, config.exportFadeIn, config.exportFadeOut, config.showHookIntro, config.hookTTS, config.hookTTSProvider, generateElevenLabsVoice]);
+  }, [config, coverName, audioDuration, generateElevenLabsVoice]);
 
   // ══════════════════════════════════════════
   // THUMBNAIL EXPORT
