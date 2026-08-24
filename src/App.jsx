@@ -78,6 +78,33 @@ const DEFAULT_CONFIG = {
   bgTrimEnd: 0,
 };
 
+// ── Parse a VGM rip filename into { gameName, trackTitle, artist, gameYear } ──
+// Handles the common conventions: "Game - Title - Composer.mp3", "Game - Title.mp3",
+// with an optional leading track number ("01 - ", "03. ", "(3) ") and an optional
+// bare year segment ("(1996)") anywhere in the dash-separated parts.
+function parseAudioFilename(filename) {
+  let name = (filename || '').replace(/\.[^.]+$/, '').trim(); // strip extension
+  name = name.replace(/^\s*(?:track\s*)?\(?\d{1,3}\)?[.\-)]?\s+/i, '').trim(); // leading track number
+
+  const parts = name.split(/\s+-\s+/).map(p => p.trim()).filter(Boolean);
+  const yearPart = parts.find(p => /^\(?(19|20)\d{2}\)?$/.test(p));
+  const rest = parts.filter(p => p !== yearPart);
+
+  const result = {};
+  if (yearPart) result.gameYear = yearPart.replace(/[()]/g, '');
+  if (rest.length >= 3) {
+    result.gameName = rest[0];
+    result.trackTitle = rest[1];
+    result.artist = rest[2];
+  } else if (rest.length === 2) {
+    result.gameName = rest[0];
+    result.trackTitle = rest[1];
+  } else if (rest.length === 1) {
+    result.trackTitle = rest[0];
+  }
+  return result;
+}
+
 export default function App() {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -349,6 +376,19 @@ export default function App() {
     audioUrlRef.current = url;
     setAudioName(file.name);
     setIsPlaying(false);
+
+    // Auto-fill track title / game / artist / year from the filename, but
+    // only for fields still at their untouched default — never clobber
+    // info the user already typed in.
+    const parsed = parseAudioFilename(file.name);
+    setConfig(prev => {
+      const next = { ...prev };
+      if (parsed.trackTitle && (!prev.trackTitle || prev.trackTitle === DEFAULT_CONFIG.trackTitle)) next.trackTitle = parsed.trackTitle;
+      if (parsed.gameName && (!prev.gameName || prev.gameName === DEFAULT_CONFIG.gameName)) next.gameName = parsed.gameName;
+      if (parsed.artist && (!prev.artist || prev.artist === DEFAULT_CONFIG.artist)) next.artist = parsed.artist;
+      if (parsed.gameYear && (!prev.gameYear || prev.gameYear === DEFAULT_CONFIG.gameYear)) next.gameYear = parsed.gameYear;
+      return next;
+    });
 
     // Create fresh audio element
     const audio = new Audio();
