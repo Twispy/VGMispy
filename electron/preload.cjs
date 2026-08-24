@@ -28,6 +28,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Thumbnail
   saveThumbnail: (arrayBuffer) => ipcRenderer.invoke('thumbnail:save', arrayBuffer),
 
+  // Auto-save / crash recovery
+  autosaveProject: (data) => ipcRenderer.invoke('autosave:write', data),
+  checkRecovery: () => ipcRenderer.invoke('autosave:checkRecovery'),
+  clearAutosave: () => ipcRenderer.invoke('autosave:clear'),
+
   // Check if running in Electron
   isElectron: true,
 });

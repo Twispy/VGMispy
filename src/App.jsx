@@ -96,6 +96,7 @@ export default function App() {
   const hookVoiceRef = useRef(null);       // HTMLAudioElement for ElevenLabs hook audio
   const hookVoiceCacheRef = useRef(null);  // { key, url } – avoid regenerating same audio
   const triggerHookTTSRef = useRef(null);  // callable from rAF loop for loop-triggered TTS
+  const [hookTTSError, setHookTTSError] = useState('');
 
   // Refs
   const canvasContainerRef = useRef(null);
@@ -446,19 +447,21 @@ export default function App() {
 
   const generateElevenLabsVoice = useCallback(async () => {
     const cfg = configRef.current;
-    if (!cfg.elevenLabsKey || !cfg.hookTTSVoiceId) return null;
+    const key = (cfg.elevenLabsKey || '').trim();
+    if (!key || !cfg.hookTTSVoiceId) return null;
 
     const text = cfg.hookText || 'You forgot this masterpiece...';
-    const cacheKey = `${cfg.elevenLabsKey}|${cfg.hookTTSVoiceId}|${text}|${cfg.hookTTSStability}|${cfg.hookTTSSimilarity}`;
+    const cacheKey = `${key}|${cfg.hookTTSVoiceId}|${text}|${cfg.hookTTSStability}|${cfg.hookTTSSimilarity}`;
 
     if (hookVoiceCacheRef.current?.key === cacheKey) {
       return hookVoiceCacheRef.current.url;
     }
 
+    setHookTTSError('');
     try {
       const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${cfg.hookTTSVoiceId}`, {
         method: 'POST',
-        headers: { 'xi-api-key': cfg.elevenLabsKey, 'Content-Type': 'application/json' },
+        headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text,
           model_id: 'eleven_multilingual_v2',
@@ -468,7 +471,12 @@ export default function App() {
           },
         }),
       });
-      if (!res.ok) throw new Error(`ElevenLabs ${res.status}`);
+      if (!res.ok) {
+        // ElevenLabs returns a JSON body with { detail: { message, status } } explaining the 4xx/5xx
+        let detail = '';
+        try { detail = (await res.json())?.detail?.message || ''; } catch (_) { /* not JSON */ }
+        throw new Error(`ElevenLabs ${res.status}${detail ? ' — ' + detail : ''}`);
+      }
       const blob = await res.blob();
       if (hookVoiceCacheRef.current?.url) URL.revokeObjectURL(hookVoiceCacheRef.current.url);
       const url = URL.createObjectURL(blob);
@@ -476,6 +484,7 @@ export default function App() {
       return url;
     } catch (e) {
       console.error('ElevenLabs TTS error:', e);
+      setHookTTSError(e.message || 'Erreur ElevenLabs inconnue');
       return null;
     }
   }, []);
@@ -743,24 +752,32 @@ export default function App() {
 
     // Start playback at the chosen start time
     audio.currentTime = startTime;
-    analyzerRef.current.resume();
+    await analyzerRef.current.resume();
     analyzerRef.current.scheduleFades(
       config.exportFadeIn || 0,
       config.exportFadeOut || 0,
       duration
     );
-    audio.play().then(() => {
-      setIsPlaying(true);
-      renderer.startFadeIn();
-      // Play TTS simultaneously with music start, duck music while speaking
-      if (ttsExportEl) {
-        analyzerRef.current.duckGain(0.15);
-        ttsExportEl.play().catch(e => console.warn('[TTS] export play failed:', e));
-        ttsExportEl.addEventListener('ended', () => {
-          analyzerRef.current.duckGain(1.0);
-        }, { once: true });
-      }
-    });
+
+    // Wait for playback to actually start before recording — otherwise the
+    // recorder can begin (and its duration countdown start ticking) before
+    // the audio/fade-in/hook have kicked in, cutting off the beginning or
+    // desyncing audio depending on how long decode/seek takes.
+    try {
+      await audio.play();
+    } catch (e) {
+      console.warn('[Export] audio.play failed:', e);
+    }
+    setIsPlaying(true);
+    renderer.startFadeIn();
+    // Play TTS simultaneously with music start, duck music while speaking
+    if (ttsExportEl) {
+      analyzerRef.current.duckGain(0.15);
+      ttsExportEl.play().catch(e => console.warn('[TTS] export play failed:', e));
+      ttsExportEl.addEventListener('ended', () => {
+        analyzerRef.current.duckGain(1.0);
+      }, { once: true });
+    }
 
     exporterRef.current.startExport(videoStream, audioStream, {
       duration,
@@ -783,7 +800,7 @@ export default function App() {
       },
     });
 
-    // Schedule fade out near the end
+    // Schedule fade out near the end (now correctly relative to recording start)
     setTimeout(() => {
       renderer.startFadeOut();
     }, (duration - 1.5) * 1000);
@@ -845,6 +862,47 @@ export default function App() {
       window.electronAPI.getRecentProjects().then(r => setRecentProjects(r || []));
     }
   }, []);
+
+  // ══════════════════════════════════════════
+  // AUTO-SAVE / CRASH RECOVERY
+  // ══════════════════════════════════════════
+  // On launch: main process tells us whether last session ended without a
+  // clean shutdown (crash, force-kill, power loss). If so, offer to restore
+  // the config from the last silent autosave.
+  const [recoveryData, setRecoveryData] = useState(null);
+  useEffect(() => {
+    if (!window.electronAPI?.isElectron) return;
+    window.electronAPI.checkRecovery().then(res => {
+      if (res?.hasRecovery && res.data?.config) setRecoveryData(res.data);
+    });
+  }, []);
+
+  const handleRestoreRecovery = useCallback(() => {
+    if (recoveryData?.config) setConfig(prev => ({ ...prev, ...recoveryData.config }));
+    setRecoveryData(null);
+  }, [recoveryData]);
+
+  const handleDismissRecovery = useCallback(() => {
+    setRecoveryData(null);
+    window.electronAPI?.clearAutosave?.();
+  }, []);
+
+  // Debounced silent autosave — writes a few seconds after the user stops
+  // changing anything, so it doesn't hammer disk I/O while dragging sliders.
+  const autosaveTimerRef = useRef(null);
+  useEffect(() => {
+    if (!window.electronAPI?.isElectron) return;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      window.electronAPI.autosaveProject({
+        version: 5,
+        config,
+        audioName, coverName, bgName, gameImageName, gameplayName,
+        savedAt: Date.now(),
+      });
+    }, 3000);
+    return () => clearTimeout(autosaveTimerRef.current);
+  }, [config, audioName, coverName, bgName, gameImageName, gameplayName]);
 
   // ══════════════════════════════════════════
   // GAME SEARCH (IGDB via main process proxy — no CORS)
@@ -1032,10 +1090,36 @@ export default function App() {
       style={{
         display: 'flex', width: '100vw', height: '100vh',
         background: '#040408', overflow: 'hidden',
+        position: 'relative',
         border: isDragging ? '3px dashed rgba(167,139,250,0.6)' : '3px solid transparent',
         transition: 'border-color 0.2s',
       }}
     >
+      {/* ── Crash recovery banner ── */}
+      {recoveryData && (
+        <div style={{
+          position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 9999, display: 'flex', alignItems: 'center', gap: 12,
+          background: '#14141c', border: `1px solid ${config.accentColor}60`,
+          borderRadius: 10, padding: '10px 14px',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.5)', fontFamily: "'Outfit', sans-serif",
+        }}>
+          <span style={{ fontSize: 12, color: '#f1f0f5' }}>
+            ⚠️ La session précédente s'est arrêtée brutalement — restaurer les réglages ?
+          </span>
+          <button onClick={handleRestoreRecovery} style={{
+            padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            border: `1px solid ${config.accentColor}60`, background: config.accentColor + '20',
+            color: config.accentColor, fontFamily: "'Outfit', sans-serif",
+          }}>Restaurer</button>
+          <button onClick={handleDismissRecovery} style={{
+            padding: '5px 12px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
+            border: '1px solid rgba(255,255,255,0.15)', background: 'transparent',
+            color: 'rgba(241,240,245,0.5)', fontFamily: "'Outfit', sans-serif",
+          }}>Ignorer</button>
+        </div>
+      )}
+
       {/* ── Canvas Preview Area ── */}
       <div
         ref={canvasContainerRef}
@@ -1444,6 +1528,7 @@ export default function App() {
         recentProjects={recentProjects}
         onLoadFromPath={handleLoadFromPath}
         onGenerateElevenLabs={generateElevenLabsVoice}
+        hookTTSError={hookTTSError}
         onSearchGame={handleSearchGame}
         gameSearchResults={gameSearchResults}
         gameSearchError={gameSearchError}

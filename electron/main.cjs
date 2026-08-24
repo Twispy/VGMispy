@@ -45,7 +45,23 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+// ─── Auto-save / crash recovery ───
+// A session lock file is written on startup and removed on clean shutdown.
+// If it's still there next launch, the app didn't exit cleanly last time
+// (crash, force-kill, power loss) — offer to restore the last autosave.
+const AUTOSAVE_FILE = path.join(app.getPath('userData'), 'autosave.json');
+const SESSION_LOCK_FILE = path.join(app.getPath('userData'), 'session.lock');
+let crashedLastSession = false;
+
+app.whenReady().then(() => {
+  crashedLastSession = fs.existsSync(SESSION_LOCK_FILE);
+  try { fs.writeFileSync(SESSION_LOCK_FILE, String(Date.now())); } catch (e) {}
+  createWindow();
+});
+
+app.on('before-quit', () => {
+  try { fs.unlinkSync(SESSION_LOCK_FILE); } catch (e) {}
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
@@ -53,6 +69,30 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+
+ipcMain.handle('autosave:write', async (event, data) => {
+  try {
+    fs.writeFileSync(AUTOSAVE_FILE, JSON.stringify(data));
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('autosave:checkRecovery', async () => {
+  if (!crashedLastSession) return { hasRecovery: false };
+  try {
+    const data = JSON.parse(fs.readFileSync(AUTOSAVE_FILE, 'utf-8'));
+    return { hasRecovery: true, data };
+  } catch (e) {
+    return { hasRecovery: false };
+  }
+});
+
+ipcMain.handle('autosave:clear', async () => {
+  try { fs.unlinkSync(AUTOSAVE_FILE); } catch (e) {}
+  return { success: true };
 });
 
 // ─── IPC: Save dialog for export ───

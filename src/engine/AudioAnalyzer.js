@@ -80,8 +80,9 @@ export function createAudioAnalyzer() {
 
   function resume() {
     if (audioContext?.state === 'suspended') {
-      audioContext.resume();
+      return audioContext.resume();
     }
+    return Promise.resolve();
   }
 
   /**

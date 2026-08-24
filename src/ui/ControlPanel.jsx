@@ -305,7 +305,7 @@ export default function ControlPanel({
   audioName, coverName, bgName, gameImageName, gameplayName, gameplayDuration, bgDuration,
   audioDuration, waveformData,
   normGain,
-  onSaveProject, onLoadProject, recentProjects, onLoadFromPath, onGenerateElevenLabs,
+  onSaveProject, onLoadProject, recentProjects, onLoadFromPath, onGenerateElevenLabs, hookTTSError,
   onSearchGame, gameSearchResults, gameSearchError, onSelectGame,
 }) {
   const audioRef = useRef(null);
@@ -344,6 +344,7 @@ export default function ControlPanel({
   }, [isExporting, exportStartTime]);
 
   const fetchElVoices = useCallback(async (key) => {
+    key = (key || '').trim();
     if (!key) return;
     setElVoicesLoading(true);
     setElVoicesError('');
@@ -351,7 +352,17 @@ export default function ControlPanel({
       const res = await fetch('https://api.elevenlabs.io/v1/voices', {
         headers: { 'xi-api-key': key },
       });
-      if (!res.ok) throw new Error(`Erreur ${res.status} — clé API invalide ?`);
+      if (!res.ok) {
+        let detail = '';
+        try { detail = (await res.json())?.detail?.message || ''; } catch (_) { /* not JSON */ }
+        const reason = detail || (
+          res.status === 401 ? 'clé API invalide'
+          : res.status === 403 ? 'clé désactivée / accès refusé'
+          : res.status === 429 ? 'quota dépassé (limite mensuelle atteinte)'
+          : 'erreur serveur'
+        );
+        throw new Error(`Erreur ${res.status} — ${reason}`);
+      }
       const data = await res.json();
       setElVoices(data.voices || []);
     } catch (e) {
@@ -866,7 +877,7 @@ export default function ControlPanel({
                     <div style={{ display: 'flex', gap: 5 }}>
                       <input style={{ ...input, flex: 1, fontSize: 11 }} type="password"
                         value={config.elevenLabsKey || ''} placeholder="Coller ta clé ici..."
-                        onChange={e => { set('elevenLabsKey', e.target.value); setElVoices([]); }} />
+                        onChange={e => { set('elevenLabsKey', e.target.value.trim()); setElVoices([]); }} />
                       <button onClick={() => fetchElVoices(config.elevenLabsKey)} style={{
                         padding: '0 10px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer',
                         border: `1px solid ${config.accentColor}40`, background: config.accentColor + '15',
@@ -905,6 +916,8 @@ export default function ControlPanel({
                     background: config.accentColor + '18', border: `1px solid ${config.accentColor}40`,
                     color: config.accentColor, fontSize: 11, cursor: 'pointer', fontFamily: "'Outfit',sans-serif",
                   }}>{elPreviewLoading ? '⏳ Génération…' : '▶ Générer & prévisualiser'}</button>
+
+                  {hookTTSError && <div style={{ fontSize: 10, color: '#f87171', marginTop: -2 }}>{hookTTSError}</div>}
 
                   <div style={{ fontSize: 9, color: 'rgba(241,240,245,0.25)', lineHeight: 1.4 }}>
                     L'audio est mis en cache — il n'est regénéré que si le texte ou la voix changent.
@@ -1500,7 +1513,7 @@ export default function ControlPanel({
         <div>
           <div style={label}>ElevenLabs API Key <span style={{ fontSize: 9, color: 'rgba(241,240,245,0.25)' }}>(elevenlabs.io/profile)</span></div>
           <input style={input} type="password" value={config.elevenLabsKey || ''}
-            onChange={e => set('elevenLabsKey', e.target.value)} placeholder="elevenlabs.io → Profile → API Keys" />
+            onChange={e => set('elevenLabsKey', e.target.value.trim())} placeholder="elevenlabs.io → Profile → API Keys" />
         </div>
         <div style={{ fontSize: 9, color: 'rgba(241,240,245,0.2)', lineHeight: 1.4, marginTop: -4 }}>
           💡 Gratuit jusqu'à 10 000 caractères/mois. Utilisé pour la synthèse vocale IA du hook.
