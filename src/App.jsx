@@ -861,15 +861,38 @@ export default function App() {
   // ══════════════════════════════════════════
   // THUMBNAIL EXPORT
   // ══════════════════════════════════════════
-  const handleExportThumbnail = useCallback(async () => {
+  const handleExportThumbnail = useCallback(async (atHighlight = false) => {
     const canvas = canvasRef.current;
+    const audio = audioRef.current;
     if (!canvas) return;
+
+    // Seek to the highlight instant first, so the captured frame matches
+    // the punchiest moment instead of wherever playback happens to be.
+    let resumeAfter = false;
+    if (atHighlight && audio && waveformData && audioDuration) {
+      const highlight = findBestHighlight(waveformData, audioDuration, 4);
+      if (highlight) {
+        resumeAfter = !audio.paused;
+        audio.pause();
+        setIsPlaying(false);
+        audio.currentTime = (highlight.start + highlight.end) / 2;
+        // Give the render loop a couple of frames to pick up the new
+        // position (renderer.setAudioTime is fed from a running rAF loop,
+        // not synchronous with the seek) before we capture the canvas.
+        await new Promise(resolve => setTimeout(resolve, 120));
+      }
+    }
+
     const dataUrl = canvas.toDataURL('image/png');
     const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
     const buffer = Uint8Array.from(atob(base64), c => c.charCodeAt(0)).buffer;
-    const result = await window.electronAPI.saveThumbnail(buffer);
-    if (result?.success) console.log('Thumbnail saved:', result.path);
-  }, []);
+    const saveResult = await window.electronAPI.saveThumbnail(buffer);
+    if (saveResult?.success) console.log('Thumbnail saved:', saveResult.path);
+
+    if (resumeAfter) {
+      audio.play().then(() => setIsPlaying(true)).catch(() => {});
+    }
+  }, [waveformData, audioDuration]);
 
   // ══════════════════════════════════════════
   // SAVE / LOAD PROJECT
@@ -1435,13 +1458,22 @@ export default function App() {
                   color: loopPreview ? config.accentColor || '#a78bfa' : 'rgba(255,255,255,0.35)',
                 }}>⟳ Loop</button>
                 {/* Thumbnail */}
-                <button onClick={handleExportThumbnail} title="Exporter la frame actuelle en PNG" style={{
+                <button onClick={() => handleExportThumbnail(false)} title="Exporter la frame actuelle en PNG" style={{
                   padding: '2px 8px', fontSize: 10, cursor: 'pointer', borderRadius: 4,
                   fontFamily: "'Space Mono', monospace",
                   background: 'rgba(255,255,255,0.06)',
                   border: '1px solid rgba(255,255,255,0.15)',
                   color: 'rgba(255,255,255,0.35)',
                 }}>🖼 PNG</button>
+                <button onClick={() => handleExportThumbnail(true)} disabled={!waveformData}
+                  title="Miniature sur le meilleur passage détecté" style={{
+                  padding: '2px 8px', fontSize: 10, cursor: waveformData ? 'pointer' : 'not-allowed',
+                  opacity: waveformData ? 1 : 0.4, borderRadius: 4,
+                  fontFamily: "'Space Mono', monospace",
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: 'rgba(255,255,255,0.35)',
+                }}>🎯 PNG</button>
                 {/* Export range label */}
                 <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', fontFamily: "'Space Mono', monospace" }}>
                   {`${Math.floor(config.exportStart/60)}:${String(Math.floor(config.exportStart%60)).padStart(2,'0')}→${Math.floor(config.exportEnd/60)}:${String(Math.floor(config.exportEnd%60)).padStart(2,'0')}`}
