@@ -225,6 +225,22 @@ ipcMain.handle('thumbnail:save', async (event, arrayBuffer) => {
   }
 });
 
+// ─── IPC: Save upload metadata (.txt) ───
+ipcMain.handle('metadata:save', async (event, content, defaultName) => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Save Metadata',
+    defaultPath: defaultName || 'vgm-metadata.txt',
+    filters: [{ name: 'Text File', extensions: ['txt'] }],
+  });
+  if (result.canceled || !result.filePath) return { success: false };
+  try {
+    fs.writeFileSync(result.filePath, content, 'utf-8');
+    return { success: true, path: result.filePath };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
 // ─── IPC: Save project (.json) ───
 ipcMain.handle('project:save', async (event, projectData) => {
   const result = await dialog.showSaveDialog(mainWindow, {

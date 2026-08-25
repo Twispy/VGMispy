@@ -28,6 +28,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Thumbnail
   saveThumbnail: (arrayBuffer) => ipcRenderer.invoke('thumbnail:save', arrayBuffer),
 
+  // Upload metadata (.txt)
+  saveMetadataText: (content, defaultName) => ipcRenderer.invoke('metadata:save', content, defaultName),
+
   // Auto-save / crash recovery
   autosaveProject: (data) => ipcRenderer.invoke('autosave:write', data),
   checkRecovery: () => ipcRenderer.invoke('autosave:checkRecovery'),

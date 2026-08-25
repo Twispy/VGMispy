@@ -307,6 +307,7 @@ export default function ControlPanel({
   normGain,
   onSaveProject, onLoadProject, recentProjects, onLoadFromPath, onGenerateElevenLabs, hookTTSError,
   onGenerateAnecdotes, anecdotesLoading, anecdotesError,
+  onGenerateMetadata, metadataLoading, metadataError, metadataResult, onSaveMetadata,
   onSearchGame, gameSearchResults, gameSearchError, onSelectGame,
 }) {
   const audioRef = useRef(null);
@@ -1527,6 +1528,43 @@ export default function ControlPanel({
             </div>
           );
         })()}
+
+        {/* Upload metadata (Claude) */}
+        <div style={subDivider} />
+        <div>
+          <div style={label}>Métadonnées d'upload</div>
+          <button onClick={onGenerateMetadata} disabled={metadataLoading} style={{
+            width: '100%', padding: '7px 0', borderRadius: 7,
+            cursor: metadataLoading ? 'wait' : 'pointer',
+            border: `1px solid ${config.accentColor}40`, background: config.accentColor + '15',
+            color: config.accentColor, fontSize: 11, fontWeight: 700, fontFamily: "'Outfit',sans-serif",
+          }}>{metadataLoading ? '⏳ Génération…' : '📝 Générer titre / description / hashtags (IA)'}</button>
+          {metadataError && <div style={{ fontSize: 10, color: '#f87171', marginTop: 5 }}>{metadataError}</div>}
+          {metadataResult && (
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div>
+                <div style={label}>Titre</div>
+                <textarea style={{ ...input, minHeight: 32, resize: 'vertical' }} value={metadataResult.title} readOnly />
+              </div>
+              <div>
+                <div style={label}>Description</div>
+                <textarea style={{ ...input, minHeight: 60, resize: 'vertical' }} value={metadataResult.description} readOnly />
+              </div>
+              <div>
+                <div style={label}>Hashtags</div>
+                <textarea style={{ ...input, minHeight: 44, resize: 'vertical' }} value={(metadataResult.hashtags || []).join(' ')} readOnly />
+              </div>
+              <button onClick={onSaveMetadata} style={{
+                width: '100%', padding: '6px 0', borderRadius: 6, cursor: 'pointer',
+                border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.06)',
+                color: 'rgba(241,240,245,0.6)', fontSize: 10, fontWeight: 700, fontFamily: "'Outfit',sans-serif",
+              }}>💾 Enregistrer en .txt</button>
+              <div style={{ fontSize: 9, color: 'rgba(241,240,245,0.2)', lineHeight: 1.4 }}>
+                ⚠️ Généré par IA — relis avant de publier.
+              </div>
+            </div>
+          )}
+        </div>
       </Section>
 
       {/* ══════════════════════════════════════ */}

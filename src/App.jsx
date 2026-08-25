@@ -8,6 +8,15 @@ import { findBestHighlight } from './engine/highlightDetector';
 import { getExportWarnings } from './engine/exportChecklist';
 import Anthropic from '@anthropic-ai/sdk';
 import { generateAnecdotes } from './engine/anecdoteGenerator';
+import { generateMetadata, formatMetadataText } from './engine/metadataGenerator';
+
+// ── Turns an Anthropic SDK error into a short, user-facing French message ──
+function describeAnthropicError(e) {
+  if (e instanceof Anthropic.AuthenticationError) return 'Clé API Anthropic invalide.';
+  if (e instanceof Anthropic.RateLimitError) return 'Limite de requêtes atteinte — réessaie dans un instant.';
+  if (e instanceof Anthropic.APIError) return `Erreur API (${e.status}) : ${e.message}`;
+  return e.message || 'Erreur inconnue';
+}
 export { STYLE_TEMPLATES } from './styleTemplates';
 
 const DEFAULT_CONFIG = {
@@ -1019,16 +1028,54 @@ export default function App() {
         setConfig(prev => ({ ...prev, afterHookEnabled: true, afterHookLines: lines }));
       }
     } catch (e) {
-      let msg = e.message || 'Erreur inconnue';
-      if (e instanceof Anthropic.AuthenticationError) msg = 'Clé API Anthropic invalide.';
-      else if (e instanceof Anthropic.RateLimitError) msg = 'Limite de requêtes atteinte — réessaie dans un instant.';
-      else if (e instanceof Anthropic.APIError) msg = `Erreur API (${e.status}) : ${e.message}`;
       console.error('Anecdotes generation error:', e);
-      setAnecdotesError(msg);
+      setAnecdotesError(describeAnthropicError(e));
     } finally {
       setAnecdotesLoading(false);
     }
   }, [config.anthropicApiKey, config.gameName, config.gameStudio, config.gameYear, config.trackTitle, config.artist]);
+
+  // ══════════════════════════════════════════
+  // UPLOAD METADATA (Claude API) — title / description / hashtags
+  // ══════════════════════════════════════════
+  const [metadataLoading, setMetadataLoading] = useState(false);
+  const [metadataError, setMetadataError] = useState('');
+  const [metadataResult, setMetadataResult] = useState(null);
+
+  const handleGenerateMetadata = useCallback(async () => {
+    const key = (config.anthropicApiKey || '').trim();
+    if (!key) {
+      setMetadataError('Clé API Anthropic manquante (Settings).');
+      return;
+    }
+    setMetadataLoading(true);
+    setMetadataError('');
+    try {
+      const data = await generateMetadata(key, {
+        gameName: config.gameName,
+        gameStudio: config.gameStudio,
+        gameYear: config.gameYear,
+        trackTitle: config.trackTitle,
+        artist: config.artist,
+      });
+      setMetadataResult(data);
+    } catch (e) {
+      console.error('Metadata generation error:', e);
+      setMetadataError(describeAnthropicError(e));
+    } finally {
+      setMetadataLoading(false);
+    }
+  }, [config.anthropicApiKey, config.gameName, config.gameStudio, config.gameYear, config.trackTitle, config.artist]);
+
+  const handleSaveMetadata = useCallback(async () => {
+    if (!metadataResult || !window.electronAPI?.isElectron) return;
+    const safeName = (config.trackTitle || 'vgm').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    const result = await window.electronAPI.saveMetadataText(
+      formatMetadataText(metadataResult),
+      `${safeName}-metadata.txt`
+    );
+    if (result?.success) console.log('Metadata saved:', result.path);
+  }, [metadataResult, config.trackTitle]);
 
   // ══════════════════════════════════════════
   // GAME SEARCH (IGDB via main process proxy — no CORS)
@@ -1668,6 +1715,11 @@ export default function App() {
         onGenerateAnecdotes={handleGenerateAnecdotes}
         anecdotesLoading={anecdotesLoading}
         anecdotesError={anecdotesError}
+        onGenerateMetadata={handleGenerateMetadata}
+        metadataLoading={metadataLoading}
+        metadataError={metadataError}
+        metadataResult={metadataResult}
+        onSaveMetadata={handleSaveMetadata}
         onSearchGame={handleSearchGame}
         gameSearchResults={gameSearchResults}
         gameSearchError={gameSearchError}
