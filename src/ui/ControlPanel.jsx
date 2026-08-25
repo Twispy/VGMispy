@@ -306,6 +306,7 @@ export default function ControlPanel({
   audioDuration, waveformData,
   normGain,
   onSaveProject, onLoadProject, recentProjects, onLoadFromPath, onGenerateElevenLabs, hookTTSError,
+  onGenerateAnecdotes, anecdotesLoading, anecdotesError,
   onSearchGame, gameSearchResults, gameSearchError, onSelectGame,
 }) {
   const audioRef = useRef(null);
@@ -939,6 +940,16 @@ export default function ControlPanel({
             <Toggle accentColor={config.accentColor} label="Texte après le hook" value={config.afterHookEnabled || false} onChange={v => set('afterHookEnabled', v)} />
             {config.afterHookEnabled && (
               <div style={{ paddingLeft: 12, marginTop: -4 }}>
+                <button onClick={onGenerateAnecdotes} disabled={anecdotesLoading} style={{
+                  width: '100%', padding: '6px 0', marginBottom: 6, borderRadius: 6,
+                  cursor: anecdotesLoading ? 'wait' : 'pointer',
+                  border: `1px solid ${config.accentColor}40`, background: config.accentColor + '15',
+                  color: config.accentColor, fontSize: 11, fontWeight: 700, fontFamily: "'Outfit',sans-serif",
+                }}>{anecdotesLoading ? '⏳ Génération…' : '✨ Générer des anecdotes (IA)'}</button>
+                {anecdotesError && <div style={{ fontSize: 10, color: '#f87171', marginBottom: 6 }}>{anecdotesError}</div>}
+                <div style={{ fontSize: 9, color: 'rgba(241,240,245,0.25)', lineHeight: 1.4, marginBottom: 6 }}>
+                  ⚠️ Généré par IA — vérifie les faits avant publication, ça peut se tromper sur des détails précis.
+                </div>
                 <Slider accentColor={config.accentColor} lbl="Durée" value={config.afterHookDuration ?? 4} min={1} max={30} step={0.5} suffix="s"
                   onChange={e => set('afterHookDuration', parseFloat(e.target.value))} />
                 <Slider accentColor={config.accentColor} lbl="Position Y" value={Math.round((config.afterHookPositionY ?? 0.78) * 100)} min={10} max={95} step={1} suffix="%"
@@ -1540,6 +1551,15 @@ export default function ControlPanel({
           <div style={label}>Twitch Client Secret</div>
           <input style={input} type="password" value={config.twitchClientSecret || ''}
             onChange={e => set('twitchClientSecret', e.target.value)} placeholder="Twitch Client Secret" />
+        </div>
+        <div style={subDivider} />
+        <div>
+          <div style={label}>Clé API Anthropic <span style={{ fontSize: 9, color: 'rgba(241,240,245,0.25)' }}>(console.anthropic.com)</span></div>
+          <input style={input} type="password" value={config.anthropicApiKey || ''}
+            onChange={e => set('anthropicApiKey', e.target.value.trim())} placeholder="sk-ant-..." />
+        </div>
+        <div style={{ fontSize: 9, color: 'rgba(241,240,245,0.2)', lineHeight: 1.4, marginTop: -4 }}>
+          💡 Utilisée pour générer des anecdotes sur le jeu (texte après le hook).
         </div>
         <div style={{ fontSize: 9, color: 'rgba(241,240,245,0.2)', lineHeight: 1.4 }}>
           💡 Free — create an app at dev.twitch.tv/console. Used for IGDB game search (cover art, studio, year).

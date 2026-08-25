@@ -6,6 +6,8 @@ import { createAudioAnalyzer } from './engine/AudioAnalyzer';
 import { createExporter } from './engine/VideoExporter';
 import { findBestHighlight } from './engine/highlightDetector';
 import { getExportWarnings } from './engine/exportChecklist';
+import Anthropic from '@anthropic-ai/sdk';
+import { generateAnecdotes } from './engine/anecdoteGenerator';
 export { STYLE_TEMPLATES } from './styleTemplates';
 
 const DEFAULT_CONFIG = {
@@ -54,6 +56,7 @@ const DEFAULT_CONFIG = {
   hookTTSStability: 0.5,
   hookTTSSimilarity: 0.75,
   elevenLabsKey: '',
+  anthropicApiKey: '',
   watermarkEnabled: false,
   watermarkOpacity: 0.8,
   watermarkSize: 120,
@@ -171,8 +174,9 @@ export default function App() {
       elevenLabsKey:     localStorage.getItem('cred_elevenLabsKey')     || '',
       twitchClientId:    localStorage.getItem('cred_twitchClientId')    || '',
       twitchClientSecret:localStorage.getItem('cred_twitchClientSecret')|| '',
+      anthropicApiKey:   localStorage.getItem('cred_anthropicApiKey')   || '',
     };
-    if (saved.elevenLabsKey || saved.twitchClientId || saved.twitchClientSecret) {
+    if (saved.elevenLabsKey || saved.twitchClientId || saved.twitchClientSecret || saved.anthropicApiKey) {
       setConfig(prev => ({ ...prev, ...saved }));
     }
   }, []);
@@ -181,7 +185,8 @@ export default function App() {
     if (config.elevenLabsKey     !== undefined) localStorage.setItem('cred_elevenLabsKey',      config.elevenLabsKey);
     if (config.twitchClientId    !== undefined) localStorage.setItem('cred_twitchClientId',     config.twitchClientId);
     if (config.twitchClientSecret!== undefined) localStorage.setItem('cred_twitchClientSecret', config.twitchClientSecret);
-  }, [config.elevenLabsKey, config.twitchClientId, config.twitchClientSecret]);
+    if (config.anthropicApiKey   !== undefined) localStorage.setItem('cred_anthropicApiKey',     config.anthropicApiKey);
+  }, [config.elevenLabsKey, config.twitchClientId, config.twitchClientSecret, config.anthropicApiKey]);
 
   // ══════════════════════════════════════════
   // INIT RENDERER
@@ -989,6 +994,43 @@ export default function App() {
   }, [config, audioName, coverName, bgName, gameImageName, gameplayName]);
 
   // ══════════════════════════════════════════
+  // ANECDOTES (Claude API) — fills the after-hook subtitle lines
+  // ══════════════════════════════════════════
+  const [anecdotesLoading, setAnecdotesLoading] = useState(false);
+  const [anecdotesError, setAnecdotesError] = useState('');
+
+  const handleGenerateAnecdotes = useCallback(async () => {
+    const key = (config.anthropicApiKey || '').trim();
+    if (!key) {
+      setAnecdotesError('Clé API Anthropic manquante (Settings).');
+      return;
+    }
+    setAnecdotesLoading(true);
+    setAnecdotesError('');
+    try {
+      const lines = await generateAnecdotes(key, {
+        gameName: config.gameName,
+        gameStudio: config.gameStudio,
+        gameYear: config.gameYear,
+        trackTitle: config.trackTitle,
+        artist: config.artist,
+      });
+      if (lines.length > 0) {
+        setConfig(prev => ({ ...prev, afterHookEnabled: true, afterHookLines: lines }));
+      }
+    } catch (e) {
+      let msg = e.message || 'Erreur inconnue';
+      if (e instanceof Anthropic.AuthenticationError) msg = 'Clé API Anthropic invalide.';
+      else if (e instanceof Anthropic.RateLimitError) msg = 'Limite de requêtes atteinte — réessaie dans un instant.';
+      else if (e instanceof Anthropic.APIError) msg = `Erreur API (${e.status}) : ${e.message}`;
+      console.error('Anecdotes generation error:', e);
+      setAnecdotesError(msg);
+    } finally {
+      setAnecdotesLoading(false);
+    }
+  }, [config.anthropicApiKey, config.gameName, config.gameStudio, config.gameYear, config.trackTitle, config.artist]);
+
+  // ══════════════════════════════════════════
   // GAME SEARCH (IGDB via main process proxy — no CORS)
   // ══════════════════════════════════════════
   const [gameSearchResults, setGameSearchResults] = useState(null);
@@ -1623,6 +1665,9 @@ export default function App() {
         onLoadFromPath={handleLoadFromPath}
         onGenerateElevenLabs={generateElevenLabsVoice}
         hookTTSError={hookTTSError}
+        onGenerateAnecdotes={handleGenerateAnecdotes}
+        anecdotesLoading={anecdotesLoading}
+        anecdotesError={anecdotesError}
         onSearchGame={handleSearchGame}
         gameSearchResults={gameSearchResults}
         gameSearchError={gameSearchError}
