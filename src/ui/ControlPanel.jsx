@@ -310,6 +310,7 @@ export default function ControlPanel({
   onGenerateAnecdotes, anecdotesLoading, anecdotesError,
   onGenerateMetadata, metadataLoading, metadataError, metadataResult, onSaveMetadata,
   onGenerateHooks, hookSuggestions, hookSuggestLoading, hookSuggestError, onPickHook,
+  exportQueue, queueRunning, queueProgress, onAddToQueue, onRemoveFromQueue, onRunQueue,
   onSearchGame, gameSearchResults, gameSearchError, onSelectGame,
 }) {
   const audioRef = useRef(null);
@@ -1493,7 +1494,7 @@ export default function ControlPanel({
         {/* Export button + Stop */}
         <div style={{ display: 'flex', gap: 8 }}>
           <button
-            onClick={onExport}
+            onClick={() => onExport()}
             disabled={isExporting}
             style={{
               flex: 1, padding: '13px', borderRadius: 11, border: 'none',
@@ -1553,6 +1554,56 @@ export default function ControlPanel({
             </div>
           );
         })()}
+
+        {/* Batch export queue */}
+        <div style={subDivider} />
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+            <div style={label}>File d'export (batch)</div>
+            <span style={{ fontSize: 9, color: 'rgba(241,240,245,0.25)', fontFamily: "'Space Mono',monospace" }}>{exportQueue.length} morceau{exportQueue.length > 1 ? 'x' : ''}</span>
+          </div>
+          <div style={{ fontSize: 9, color: 'rgba(241,240,245,0.25)', lineHeight: 1.4, marginBottom: 6 }}>
+            Ajoute le morceau actuellement chargé (audio + pochette + réglages) à une file, puis lance-la pour exporter tout d'affilée sans rester devant l'écran. Le fond, le gameplay et le filigrane restent ceux actuels pour toute la file.
+          </div>
+          <button onClick={onAddToQueue} disabled={queueRunning} style={{
+            width: '100%', padding: '6px 0', borderRadius: 6,
+            cursor: queueRunning ? 'not-allowed' : 'pointer', opacity: queueRunning ? 0.5 : 1,
+            border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)',
+            color: 'rgba(241,240,245,0.6)', fontSize: 10, fontWeight: 700, fontFamily: "'Outfit',sans-serif",
+          }}>➕ Ajouter le morceau actuel à la file</button>
+
+          {exportQueue.length > 0 && (
+            <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {exportQueue.map((item, i) => (
+                <div key={item.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', borderRadius: 5,
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  background: queueRunning && queueProgress?.index === i ? config.accentColor + '18' : 'rgba(255,255,255,0.03)',
+                }}>
+                  <span style={{ fontSize: 9, color: 'rgba(241,240,245,0.3)', fontFamily: "'Space Mono',monospace", flexShrink: 0 }}>{i + 1}.</span>
+                  <span style={{ flex: 1, fontSize: 10, color: 'rgba(241,240,245,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.trackTitle}</span>
+                  {!queueRunning && (
+                    <button onClick={() => onRemoveFromQueue(item.id)} style={{
+                      background: 'rgba(255,80,80,0.15)', border: '1px solid rgba(255,80,80,0.3)',
+                      borderRadius: 4, color: 'rgba(255,120,120,0.8)', cursor: 'pointer',
+                      width: 18, height: 18, fontSize: 11, padding: 0, flexShrink: 0,
+                    }}>×</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button onClick={onRunQueue} disabled={exportQueue.length === 0 || queueRunning} style={{
+            width: '100%', padding: '7px 0', marginTop: 6, borderRadius: 7,
+            cursor: (exportQueue.length === 0 || queueRunning) ? 'not-allowed' : 'pointer',
+            opacity: exportQueue.length === 0 ? 0.4 : 1,
+            border: `1px solid ${config.accentColor}40`, background: config.accentColor + '15',
+            color: config.accentColor, fontSize: 11, fontWeight: 700, fontFamily: "'Outfit',sans-serif",
+          }}>{queueRunning
+              ? `⏳ Export ${(queueProgress?.index ?? 0) + 1}/${queueProgress?.total} — ${queueProgress?.name}`
+              : `▶ Lancer la file (${exportQueue.length})`}</button>
+        </div>
 
         {/* Upload metadata (Claude) */}
         <div style={subDivider} />

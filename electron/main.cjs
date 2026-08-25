@@ -95,6 +95,15 @@ ipcMain.handle('autosave:clear', async () => {
   return { success: true };
 });
 
+// ─── IPC: Pick an output folder (used by the batch export queue) ───
+ipcMain.handle('dialog:selectFolder', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choisir le dossier de sortie',
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  return result.filePaths[0] || null;
+});
+
 // ─── IPC: Save dialog for export ───
 ipcMain.handle('dialog:save', async (event, defaultName) => {
   const result = await dialog.showSaveDialog(mainWindow, {

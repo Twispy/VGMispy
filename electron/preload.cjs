@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveDialog: (defaultName) => ipcRenderer.invoke('dialog:save', defaultName),
   saveExportDialog: (defaultName, format) => ipcRenderer.invoke('dialog:saveExport', defaultName, format),
   openFileDialog: (filters) => ipcRenderer.invoke('dialog:openFile', filters),
+  selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),
 
   // File operations
   writeBlob: (filePath, arrayBuffer) => ipcRenderer.invoke('file:writeBlob', filePath, arrayBuffer),

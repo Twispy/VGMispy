@@ -149,6 +149,8 @@ export default function App() {
   const exporterRef = useRef(null);
   const bgVideoRef = useRef(null);
   const audioUrlRef = useRef(null);
+  const audioPathRef = useRef(null);  // real filesystem path (Electron File.path) — for batch export re-loading
+  const coverPathRef = useRef(null);
   const bandsLoopRef = useRef(null);
   const configRef = useRef(config);
   const beatStateRef = useRef({ history: new Float32Array(60), idx: 0, lastBeat: 0 });
@@ -381,7 +383,9 @@ export default function App() {
   const [waveformData, setWaveformData] = useState(null);
 
 
-  const handleLoadAudio = useCallback((file) => {
+  // Returns a Promise that resolves once loadedmetadata fires — lets the
+  // batch export queue await the audio actually being ready before exporting.
+  const handleLoadAudio = useCallback((file) => new Promise((resolve) => {
     // Clean up previous audio element
     if (audioRef.current) {
       audioRef.current.pause();
@@ -391,6 +395,7 @@ export default function App() {
 
     const url = URL.createObjectURL(file);
     audioUrlRef.current = url;
+    audioPathRef.current = file.path || null; // Electron exposes .path on File — used to reload this file later (batch queue)
     setAudioName(file.name);
     setIsPlaying(false);
 
@@ -419,6 +424,7 @@ export default function App() {
       setAudioDuration(dur);
       // Auto-set export end to full track duration
       setConfig(prev => ({ ...prev, exportEnd: dur }));
+      resolve(dur);
     });
     audio.addEventListener('ended', () => setIsPlaying(false));
     audioRef.current = audio;
@@ -438,7 +444,7 @@ export default function App() {
     };
     reader.onerror = () => worker.terminate();
     reader.readAsArrayBuffer(file);
-  }, []);
+  }), []);
 
   async function generateWaveform(file) {
     try {
@@ -613,6 +619,7 @@ export default function App() {
     const url = URL.createObjectURL(file);
     rendererRef.current?.setCoverArt(url);
     setCoverName(file.name);
+    coverPathRef.current = file.path || null;
   }, []);
 
   // ══════════════════════════════════════════
@@ -783,22 +790,27 @@ export default function App() {
     }
   }, [waveformData, audioDuration, config.exportStart, config.exportEnd]);
 
-  const handleExport = useCallback(async () => {
+  // opts: { outputPath, silent, onDone } — used by the batch export queue to
+  // write directly to a known path with no blocking dialogs/alerts/confirms,
+  // and to be notified when the export has actually finished (not just started).
+  const handleExport = useCallback(async (opts = {}) => {
     const renderer = rendererRef.current;
     const audio = audioRef.current;
 
     if (!renderer) return;
     if (!audio) {
-      alert('Charge un fichier audio d\'abord !');
+      if (!opts.silent) alert('Charge un fichier audio d\'abord !');
       return;
     }
 
-    const warnings = getExportWarnings(config, { coverName, audioDuration, defaults: DEFAULT_CONFIG });
-    if (warnings.length > 0) {
-      const proceed = window.confirm(
-        "⚠️ Avant d'exporter :\n\n" + warnings.map(w => '• ' + w).join('\n') + '\n\nExporter quand même ?'
-      );
-      if (!proceed) return;
+    if (!opts.silent) {
+      const warnings = getExportWarnings(config, { coverName, audioDuration, defaults: DEFAULT_CONFIG });
+      if (warnings.length > 0) {
+        const proceed = window.confirm(
+          "⚠️ Avant d'exporter :\n\n" + warnings.map(w => '• ' + w).join('\n') + '\n\nExporter quand même ?'
+        );
+        if (!proceed) return;
+      }
     }
 
     const startTime = config.exportStart || 0;
@@ -859,6 +871,7 @@ export default function App() {
       duration,
       format: config.exportFormat || 'mp4',
       quality: config.exportQuality || 'high',
+      outputPath: opts.outputPath || null,
     }, {
       onProgress: (p) => setExportProgress(p),
       onPhase: (phase) => setExportPhase(phase),
@@ -871,8 +884,10 @@ export default function App() {
         if (result.success) {
           console.log('Export complete:', result.path);
         } else if (result.error !== 'Cancelled') {
-          alert('Export error: ' + result.error);
+          if (opts.silent) console.error('Batch export error:', result.error);
+          else alert('Export error: ' + result.error);
         }
+        opts.onDone?.(result);
       },
     });
 
@@ -881,6 +896,91 @@ export default function App() {
       renderer.startFadeOut();
     }, (duration - 1.5) * 1000);
   }, [config, coverName, audioDuration, generateElevenLabsVoice]);
+
+  // ══════════════════════════════════════════
+  // BATCH EXPORT QUEUE
+  // ══════════════════════════════════════════
+  // Each queued item snapshots the current full config + the real filesystem
+  // paths for its audio/cover (Electron exposes .path on File objects), so it
+  // can be reloaded and exported unattended later. Background/gameplay/
+  // watermark are NOT per-item — they stay whatever is currently loaded and
+  // apply to every item in the run.
+  const [exportQueue, setExportQueue] = useState([]);
+  const [queueRunning, setQueueRunning] = useState(false);
+  const [queueProgress, setQueueProgress] = useState(null); // { index, total, name }
+
+  const handleAddToQueue = useCallback(() => {
+    if (!audioPathRef.current) {
+      alert("Impossible d'ajouter à la file : le chemin du fichier audio est introuvable (recharge-le depuis le bouton Audio Track).");
+      return;
+    }
+    setExportQueue(prev => [...prev, {
+      id: `${Date.now()}-${Math.random()}`,
+      trackTitle: config.trackTitle || 'Sans titre',
+      config: { ...config },
+      audioPath: audioPathRef.current,
+      coverPath: coverPathRef.current,
+    }]);
+  }, [config]);
+
+  const handleRemoveFromQueue = useCallback((id) => {
+    setExportQueue(prev => prev.filter(item => item.id !== id));
+  }, []);
+
+  const handleRunQueue = useCallback(async () => {
+    if (exportQueue.length === 0 || queueRunning) return;
+    if (!window.electronAPI?.isElectron) return;
+
+    const folder = await window.electronAPI.selectFolder();
+    if (!folder) return;
+
+    setQueueRunning(true);
+    const queue = exportQueue;
+
+    for (let i = 0; i < queue.length; i++) {
+      const item = queue[i];
+      setQueueProgress({ index: i, total: queue.length, name: item.trackTitle });
+
+      try {
+        // Reload the audio from its saved path and wait for it to be ready
+        const audioRes = await window.electronAPI.readFile(item.audioPath);
+        if (!audioRes.success) throw new Error('Audio introuvable : ' + item.audioPath);
+        // handleLoadAudio internally resets exportEnd to the full duration of
+        // whatever it just loaded — harmless here since we immediately apply
+        // this item's own config right after (which holds its correct, possibly
+        // user-trimmed, exportStart/exportEnd from when it was queued).
+        await handleLoadAudio(new File([audioRes.data], audioRes.name || 'audio.mp3'));
+
+        // Reload the cover, if this item had one (best-effort — doesn't block the export)
+        if (item.coverPath) {
+          const coverRes = await window.electronAPI.readFile(item.coverPath);
+          if (coverRes.success) {
+            handleLoadCover(new File([coverRes.data], coverRes.name || 'cover.png'));
+          }
+        }
+
+        // Apply this item's full config (title/artist/hook/timing/export range/etc.)
+        setConfig(item.config);
+
+        // Give the cover image + React state a moment to settle before recording
+        await new Promise(r => setTimeout(r, 500));
+
+        const safeName = item.trackTitle.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'vgm';
+        const ext = item.config.exportFormat === 'webm' ? 'webm' : 'mp4';
+        const outputPath = `${folder}\\${safeName}.${ext}`;
+
+        await new Promise((resolve) => {
+          handleExport({ outputPath, silent: true, onDone: resolve });
+        });
+      } catch (e) {
+        console.error('Échec export batch pour', item.trackTitle, e);
+      }
+    }
+
+    setQueueRunning(false);
+    setQueueProgress(null);
+    setExportQueue([]);
+  }, [exportQueue, queueRunning, handleLoadAudio, handleLoadCover, handleExport]);
 
   // ══════════════════════════════════════════
   // THUMBNAIL EXPORT
@@ -1762,6 +1862,12 @@ export default function App() {
         hookSuggestLoading={hookSuggestLoading}
         hookSuggestError={hookSuggestError}
         onPickHook={handlePickHook}
+        exportQueue={exportQueue}
+        queueRunning={queueRunning}
+        queueProgress={queueProgress}
+        onAddToQueue={handleAddToQueue}
+        onRemoveFromQueue={handleRemoveFromQueue}
+        onRunQueue={handleRunQueue}
         onSearchGame={handleSearchGame}
         gameSearchResults={gameSearchResults}
         gameSearchError={gameSearchError}

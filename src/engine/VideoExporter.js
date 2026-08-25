@@ -27,6 +27,7 @@ export function createExporter() {
   let progressInterval = null;
   let onStopCleanup = null;
   let cancelled = false;
+  let pendingOutputPath = null; // set when the caller already knows the destination (batch export) — skips the save dialog
 
   /**
    * @param {MediaStream} videoStream - From renderer.getStream()
@@ -35,6 +36,7 @@ export function createExporter() {
    * @param {number} options.duration - Total recording duration in seconds
    * @param {string} options.format - 'webm' or 'mp4'
    * @param {string} options.quality - 'high' | 'medium' | 'draft'
+   * @param {string|null} [options.outputPath] - When set, save directly to this path instead of prompting a save dialog (batch export)
    * @param {object} callbacks - { onProgress, onPhase, onComplete }
    */
   async function startExport(videoStream, audioStream, options = {}, callbacks = {}) {
@@ -42,8 +44,10 @@ export function createExporter() {
       duration = 30,
       format = 'mp4',
       quality = 'high',
+      outputPath = null,
     } = options;
 
+    pendingOutputPath = outputPath;
     progressCallback = callbacks.onProgress || (() => {});
     phaseCallback = callbacks.onPhase || (() => {});
     completeCallback = callbacks.onComplete || (() => {});
@@ -115,7 +119,7 @@ export function createExporter() {
   // ── Save as WebM (Electron) ──
   async function saveAsWebm(blob) {
     phaseCallback('saving');
-    const filePath = await window.electronAPI.saveExportDialog('vgm-vinyl-export.webm', 'webm');
+    const filePath = pendingOutputPath || await window.electronAPI.saveExportDialog('vgm-vinyl-export.webm', 'webm');
     if (!filePath) {
       completeCallback({ success: false, error: 'Cancelled' });
       return;
@@ -132,8 +136,8 @@ export function createExporter() {
   async function saveAsMp4(blob) {
     phaseCallback('converting');
 
-    // 1. Ask user where to save the MP4
-    const mp4Path = await window.electronAPI.saveExportDialog('vgm-vinyl-export.mp4', 'mp4');
+    // 1. Ask user where to save the MP4 (unless a batch run already knows the path)
+    const mp4Path = pendingOutputPath || await window.electronAPI.saveExportDialog('vgm-vinyl-export.mp4', 'mp4');
     if (!mp4Path) {
       completeCallback({ success: false, error: 'Cancelled' });
       return;
