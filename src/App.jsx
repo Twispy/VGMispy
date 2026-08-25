@@ -9,6 +9,7 @@ import { getExportWarnings } from './engine/exportChecklist';
 import Anthropic from '@anthropic-ai/sdk';
 import { generateAnecdotes } from './engine/anecdoteGenerator';
 import { generateMetadata, formatMetadataText } from './engine/metadataGenerator';
+import { generateHooks } from './engine/hookGenerator';
 
 // ── Turns an Anthropic SDK error into a short, user-facing French message ──
 function describeAnthropicError(e) {
@@ -1078,6 +1079,42 @@ export default function App() {
   }, [metadataResult, config.trackTitle]);
 
   // ══════════════════════════════════════════
+  // HOOK SUGGESTIONS (Claude API)
+  // ══════════════════════════════════════════
+  const [hookSuggestions, setHookSuggestions] = useState(null);
+  const [hookSuggestLoading, setHookSuggestLoading] = useState(false);
+  const [hookSuggestError, setHookSuggestError] = useState('');
+
+  const handleGenerateHooks = useCallback(async () => {
+    const key = (config.anthropicApiKey || '').trim();
+    if (!key) {
+      setHookSuggestError('Clé API Anthropic manquante (Settings).');
+      return;
+    }
+    setHookSuggestLoading(true);
+    setHookSuggestError('');
+    try {
+      const hooks = await generateHooks(key, {
+        gameName: config.gameName,
+        gameStudio: config.gameStudio,
+        gameYear: config.gameYear,
+        trackTitle: config.trackTitle,
+        artist: config.artist,
+      });
+      setHookSuggestions(hooks);
+    } catch (e) {
+      console.error('Hook generation error:', e);
+      setHookSuggestError(describeAnthropicError(e));
+    } finally {
+      setHookSuggestLoading(false);
+    }
+  }, [config.anthropicApiKey, config.gameName, config.gameStudio, config.gameYear, config.trackTitle, config.artist]);
+
+  const handlePickHook = useCallback((text) => {
+    setConfig(prev => ({ ...prev, hookText: text }));
+  }, []);
+
+  // ══════════════════════════════════════════
   // GAME SEARCH (IGDB via main process proxy — no CORS)
   // ══════════════════════════════════════════
   const [gameSearchResults, setGameSearchResults] = useState(null);
@@ -1720,6 +1757,11 @@ export default function App() {
         metadataError={metadataError}
         metadataResult={metadataResult}
         onSaveMetadata={handleSaveMetadata}
+        onGenerateHooks={handleGenerateHooks}
+        hookSuggestions={hookSuggestions}
+        hookSuggestLoading={hookSuggestLoading}
+        hookSuggestError={hookSuggestError}
+        onPickHook={handlePickHook}
         onSearchGame={handleSearchGame}
         gameSearchResults={gameSearchResults}
         gameSearchError={gameSearchError}

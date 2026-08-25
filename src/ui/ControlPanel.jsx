@@ -308,6 +308,7 @@ export default function ControlPanel({
   onSaveProject, onLoadProject, recentProjects, onLoadFromPath, onGenerateElevenLabs, hookTTSError,
   onGenerateAnecdotes, anecdotesLoading, anecdotesError,
   onGenerateMetadata, metadataLoading, metadataError, metadataResult, onSaveMetadata,
+  onGenerateHooks, hookSuggestions, hookSuggestLoading, hookSuggestError, onPickHook,
   onSearchGame, gameSearchResults, gameSearchError, onSelectGame,
 }) {
   const audioRef = useRef(null);
@@ -817,6 +818,24 @@ export default function ControlPanel({
                 <textarea style={textarea} rows={2} value={config.hookText || 'You forgot this masterpiece...'}
                   onChange={e => set('hookText', e.target.value)}
                   placeholder="ex: You forgot this masterpiece..." />
+                <button onClick={onGenerateHooks} disabled={hookSuggestLoading} style={{
+                  width: '100%', padding: '5px 0', marginTop: 4, borderRadius: 6,
+                  cursor: hookSuggestLoading ? 'wait' : 'pointer',
+                  border: `1px solid ${config.accentColor}40`, background: config.accentColor + '15',
+                  color: config.accentColor, fontSize: 10, fontWeight: 700, fontFamily: "'Outfit',sans-serif",
+                }}>{hookSuggestLoading ? '⏳ Génération…' : '✨ Suggérer des hooks (IA)'}</button>
+                {hookSuggestError && <div style={{ fontSize: 10, color: '#f87171', marginTop: 4 }}>{hookSuggestError}</div>}
+                {hookSuggestions && hookSuggestions.length > 0 && (
+                  <div style={{ marginTop: 5, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {hookSuggestions.map((h, i) => (
+                      <button key={i} onClick={() => onPickHook(h)} title="Utiliser ce hook" style={{
+                        textAlign: 'left', padding: '5px 8px', borderRadius: 5, cursor: 'pointer',
+                        border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)',
+                        color: 'rgba(241,240,245,0.65)', fontSize: 10, fontFamily: "'Outfit',sans-serif",
+                      }}>{h}</button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
