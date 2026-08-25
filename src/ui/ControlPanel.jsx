@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { STYLE_TEMPLATES } from '../styleTemplates';
+import { randomHook } from '../hookLibrary';
 
 // ══════════════════════════════════════════
 // STYLES
@@ -818,6 +819,11 @@ export default function ControlPanel({
                 <textarea style={textarea} rows={2} value={config.hookText || 'You forgot this masterpiece...'}
                   onChange={e => set('hookText', e.target.value)}
                   placeholder="ex: You forgot this masterpiece..." />
+                <button onClick={() => set('hookText', randomHook(config.hookText))} title="Pioche un hook dans une bibliothèque pré-écrite — gratuit, pas de clé API" style={{
+                  width: '100%', padding: '5px 0', marginTop: 4, borderRadius: 6, cursor: 'pointer',
+                  border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.05)',
+                  color: 'rgba(241,240,245,0.6)', fontSize: 10, fontWeight: 700, fontFamily: "'Outfit',sans-serif",
+                }}>🎲 Hook aléatoire (gratuit)</button>
                 <button onClick={onGenerateHooks} disabled={hookSuggestLoading} style={{
                   width: '100%', padding: '5px 0', marginTop: 4, borderRadius: 6,
                   cursor: hookSuggestLoading ? 'wait' : 'pointer',
